@@ -1,0 +1,173 @@
+[
+  {
+    "test": "Admin Login",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Login Wrong Password",
+    "status": "[PASS]",
+    "expected": 401,
+    "got": 401,
+    "success": true
+  },
+  {
+    "test": "Get Current User",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Logout",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Get All Carreras",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Create Duplicate Carrera",
+    "status": "[PASS]",
+    "expected": 409,
+    "got": 409,
+    "success": true
+  },
+  {
+    "test": "Create New Carrera",
+    "status": "[PASS]",
+    "expected": 201,
+    "got": 201,
+    "success": true
+  },
+  {
+    "test": "Get Carrera by ID",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Update Carrera",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Delete Test Carrera",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Get All Materias",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Create Materia Without Carrera",
+    "status": "[PASS]",
+    "expected": 400,
+    "got": 400,
+    "success": true
+  },
+  {
+    "test": "Create Materia",
+    "status": "[PASS]",
+    "expected": 201,
+    "got": 201,
+    "success": true
+  },
+  {
+    "test": "Get Materias by Carrera",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Get All Alumnos",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Create Alumno",
+    "status": "[PASS]",
+    "expected": 201,
+    "got": 201,
+    "success": true
+  },
+  {
+    "test": "Get Alumno by ID",
+    "status": "[FAIL]",
+    "expected": 200,
+    "got": 500,
+    "success": false,
+    "error": "<!doctype html>\n<html lang=en>\n  <head>\n    <title>RuntimeError: You must call `@jwt_required()` or `verify_jwt_in_request()` before using this method\n // Werkzeug Debugger</title>\n    <link rel=\"styl"
+  },
+  {
+    "test": "Alumno Login",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Alumno Mis Datos",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Get Calificaciones Empty",
+    "status": "[FAIL]",
+    "expected": 200,
+    "got": 404,
+    "success": false,
+    "error": "{\n  \"code\": \"NOT_FOUND\",\n  \"error\": \"No encontrado\",\n  \"message\": \"El recurso solicitado no existe\"\n}\n"
+  },
+  {
+    "test": "Get Pagos Empty",
+    "status": "[FAIL]",
+    "expected": 200,
+    "got": 404,
+    "success": false,
+    "error": "{\n  \"code\": \"NOT_FOUND\",\n  \"error\": \"No encontrado\",\n  \"message\": \"El recurso solicitado no existe\"\n}\n"
+  },
+  {
+    "test": "Create Nota Remision",
+    "status": "[PASS]",
+    "expected": 201,
+    "got": 201,
+    "success": true
+  },
+  {
+    "test": "Export SQL",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  },
+  {
+    "test": "Export Excel",
+    "status": "[PASS]",
+    "expected": 200,
+    "got": 200,
+    "success": true
+  }
+]
