@@ -53,9 +53,11 @@ class Carrera(db.Model):
     activa = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relaciones
-    materias = db.relationship('Materia', backref='carrera', lazy='dynamic')
-    alumnos = db.relationship('Alumno', backref='carrera', lazy='dynamic')
+    # Relaciones con cascade
+    materias = db.relationship('Materia', backref='carrera', 
+                            lazy='dynamic', cascade='all, delete-orphan')
+    alumnos = db.relationship('Alumno', backref='carrera', 
+                            lazy='dynamic', cascade='all, delete-orphan')
     
     def to_dict(self, include_materias=False):
         data = {
@@ -76,14 +78,15 @@ class Materia(db.Model):
     __tablename__ = 'materias'
     
     id = db.Column(db.Integer, primary_key=True)
-    carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
+    carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id', ondelete='CASCADE'), nullable=False)
     nombre = db.Column(db.String(150), nullable=False)
     codigo = db.Column(db.String(20), nullable=False)
     creditos = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relaciones
-    calificaciones = db.relationship('Calificacion', backref='materia', lazy='dynamic')
+    calificaciones = db.relationship('Calificacion', backref='materia', 
+                            lazy='dynamic', cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -118,10 +121,13 @@ class Alumno(db.Model):
     credenciales_completas = db.Column(db.Boolean, default=False)
     documentacion_completa = db.Column(db.Boolean, default=False)
     
-    # Relaciones
-    calificaciones = db.relationship('Calificacion', backref='alumno', lazy='dynamic')
-    practicas = db.relationship('PracticaProfesional', backref='alumno', lazy='dynamic')
-    notas_remision = db.relationship('NotaRemision', backref='alumno', lazy='dynamic')
+    # Relaciones con cascade para eliminación completa
+    calificaciones = db.relationship('Calificacion', backref='alumno', 
+                            lazy='dynamic', cascade='all, delete-orphan')
+    practicas = db.relationship('PracticaProfesional', backref='alumno', 
+                            lazy='dynamic', cascade='all, delete-orphan')
+    notas_remision = db.relationship('NotaRemision', backref='alumno', 
+                            lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Establece la contraseña hasheada con bcrypt"""
@@ -184,8 +190,8 @@ class Calificacion(db.Model):
     __tablename__ = 'calificaciones'
     
     id = db.Column(db.Integer, primary_key=True)
-    alumno_id = db.Column(db.Integer, db.ForeignKey('alumnos.id'), nullable=False)
-    materia_id = db.Column(db.Integer, db.ForeignKey('materias.id'), nullable=False)
+    alumno_id = db.Column(db.Integer, db.ForeignKey('alumnos.id', ondelete='CASCADE'), nullable=False)
+    materia_id = db.Column(db.Integer, db.ForeignKey('materias.id', ondelete='CASCADE'), nullable=False)
     
     # Asistencia (5 periodos)
     asistencia_1 = db.Column(db.Integer, default=0)  # 0-1
@@ -383,8 +389,9 @@ class Profesor(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relaciones
-    asignaciones = db.relationship('Asignacion', backref='profesor', lazy='dynamic')
+    # Relaciones con cascade
+    asignaciones = db.relationship('Asignacion', backref='profesor', 
+                            lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Establece la contraseña hasheada"""
@@ -447,8 +454,8 @@ class GrupoIntegrante(db.Model):
     __tablename__ = 'grupo_integrantes'
     
     id = db.Column(db.Integer, primary_key=True)
-    grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id'), nullable=False)
-    alumno_id = db.Column(db.Integer, db.ForeignKey('alumnos.id'), nullable=False)
+    grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id', ondelete='CASCADE'), nullable=False)
+    alumno_id = db.Column(db.Integer, db.ForeignKey('alumnos.id', ondelete='CASCADE'), nullable=False)
     fecha_agregado = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relaciones
@@ -472,9 +479,9 @@ class Asignacion(db.Model):
     __tablename__ = 'asignaciones'
     
     id = db.Column(db.Integer, primary_key=True)
-    profesor_id = db.Column(db.Integer, db.ForeignKey('profesores.id'), nullable=False)
-    materia_id = db.Column(db.Integer, db.ForeignKey('materias.id'), nullable=False)
-    grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id'), nullable=False)
+    profesor_id = db.Column(db.Integer, db.ForeignKey('profesores.id', ondelete='CASCADE'), nullable=False)
+    materia_id = db.Column(db.Integer, db.ForeignKey('materias.id', ondelete='CASCADE'), nullable=False)
+    grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id', ondelete='CASCADE'), nullable=False)
     
     fecha_inicio = db.Column(db.Date, nullable=False)
     fecha_fin = db.Column(db.Date, nullable=False)

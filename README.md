@@ -236,6 +236,27 @@ docker-compose down -v
 - [ ] Migrar de SQLite a PostgreSQL para producción
 - [ ] Tests automatizados
 
+## 🗑️ Eliminación en Cascada
+
+Al eliminar un registro, todos los datos relacionados se eliminan automáticamente:
+
+| Entidad Eliminada | Se elimina en cascada |
+|-------------------|----------------------|
+| **Carrera** | Materias, Alumnos (y sus calificaciones, pagos, prácticas) |
+| **Materia** | Calificaciones |
+| **Alumno** | Calificaciones, Prácticas, Pagos, GrupoIntegrante |
+| **Grupo** | GrupoIntegrante, Asignaciones |
+| **Profesor** | Asignaciones |
+| **Materia** | Calificaciones |
+
+### Cómo recrear la DB (cuando cambias foreign keys)
+```bash
+cd backend
+python migrate_cascade.py
+```
+
+**⚠️ Nota**: Esto eliminará todos los datos existentes. Hacer respaldo si es necesario.
+
 ## 📄 Licencia
 
 Proyecto desarrollado para la Universidad Felipe Villanueva.
@@ -243,3 +264,4 @@ Proyecto desarrollado para la Universidad Felipe Villanueva.
 ---
 
 **Desarrollado con ❤️ usando React, Flask y Docker**
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caravanadestrucs/portal-de-alumnos)

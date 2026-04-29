@@ -230,6 +230,14 @@ def delete_alumno(id):
     alumno = Alumno.query.get_or_404(id)
     
     try:
+        # Eliminar registros relacionados (redundante con cascade, pero seguro)
+        from models import Calificacion, GrupoIntegrante, PracticaProfesional, NotaRemision
+        
+        Calificacion.query.filter_by(alumno_id=id).delete()
+        GrupoIntegrante.query.filter_by(alumno_id=id).delete()
+        PracticaProfesional.query.filter_by(alumno_id=id).delete()
+        NotaRemision.query.filter_by(alumno_id=id).delete()
+        
         db.session.delete(alumno)
         db.session.commit()
         
