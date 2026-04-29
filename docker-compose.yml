@@ -34,7 +34,7 @@ services:
       - backend
     networks:
       - portal-network
-    command: npm run dev -- --host 0.0.0.0
+    command: sh -lc "chmod +x ./node_modules/.bin/vite || true; npm run dev -- --host 0.0.0.0"
 
 networks:
   portal-network:
