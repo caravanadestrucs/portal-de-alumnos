@@ -24,7 +24,7 @@ services:
     ports:
       - "3050:3000"
     volumes:
-      - ./frontend:/app
+      - frontend:/app
       - /app/node_modules
     environment:
       - VITE_API_URL=http://89.116.51.59:5050
@@ -41,3 +41,4 @@ networks:
 
 volumes:
   backend_db:
+  frontend:
