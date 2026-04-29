@@ -27,7 +27,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:5050
+      - VITE_API_URL=http://89.116.51.59:5050
     restart: unless-stopped
     depends_on:
       - backend
