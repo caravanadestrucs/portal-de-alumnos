@@ -7,6 +7,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Request interceptor to add auth token
@@ -15,6 +16,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Request to:', config.url, 'Token exists:', !!token);
+    } else {
+      console.log('Request to:', config.url, 'NO token');
     }
     return config;
   },
@@ -23,14 +27,18 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor - just pass through, NO auto-logout
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+    // Just log and reject - don't modify localStorage
+    const status = error.response?.status;
+    const url = error.config?.url;
+    console.log('API Error:', status, 'URL:', url);
+    if (status === 401) {
+      console.log('Got 401 - token may be invalid');
     }
     return Promise.reject(error);
   }

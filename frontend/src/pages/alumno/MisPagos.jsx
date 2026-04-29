@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
-import * as api from '../../api/pagos';
+import * as pagosApi from '../../api/pagos';
 import { CreditCard, CheckCircle, XCircle, DollarSign, Calendar } from 'lucide-react';
 
 export default function MisPagos() {
@@ -15,8 +15,9 @@ export default function MisPagos() {
       setLoading(true);
       try {
         if (user?.id) {
-          const data = await api.getPagosByAlumno(user.id);
-          setPagos(data || []);
+          const data = await pagosApi.getPagosByAlumno(user.id);
+          console.log('Pagos data:', data);
+          setPagos(Array.isArray(data) ? data : []);
         }
       } catch (error) {
         console.error('Error loading pagos:', error);

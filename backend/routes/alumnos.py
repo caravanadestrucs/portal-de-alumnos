@@ -189,6 +189,16 @@ def update_alumno(id):
                 return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
             alumno.set_password(data['password'])
         
+        # Requisitos de titulación
+        if 'servicio_social' in data:
+            alumno.servicio_social = bool(data['servicio_social'])
+        if 'examen_idiomas' in data:
+            alumno.examen_idiomas = bool(data['examen_idiomas'])
+        if 'credenciales_completas' in data:
+            alumno.credenciales_completas = bool(data['credenciales_completas'])
+        if 'documentacion_completa' in data:
+            alumno.documentacion_completa = bool(data['documentacion_completa'])
+        
         # Si cambió de carrera, eliminar calificaciones anteriores
         calificaciones_eliminadas = 0
         if carrera_cambiada:

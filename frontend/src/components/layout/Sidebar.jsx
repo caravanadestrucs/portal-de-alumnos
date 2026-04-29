@@ -11,8 +11,10 @@ import {
   LogOut,
   Menu,
   X,
+  UserCheck,
+  FolderCog,
+  ClipboardList,
 } from 'lucide-react';
-import { useState } from 'react';
 
 const adminNavItems = [
   { path: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -21,6 +23,10 @@ const adminNavItems = [
   { path: '/admin/materias', icon: BookOpen, label: 'Materias' },
   { path: '/admin/calificaciones', icon: FileText, label: 'Calificaciones' },
   { path: '/admin/pagos', icon: CreditCard, label: 'Pagos' },
+  { path: '/admin/profesores', icon: UserCheck, label: 'Profesores' },
+  { path: '/admin/grupos', icon: FolderCog, label: 'Grupos' },
+  { path: '/admin/asignaciones', icon: ClipboardList, label: 'Asignaciones' },
+  { path: '/admin/requisitos', icon: GraduationCap, label: 'Requisitos' },
   { path: '/admin/exportar', icon: Download, label: 'Exportar' },
 ];
 
@@ -31,11 +37,17 @@ const alumnoNavItems = [
   { path: '/alumno/requisitos', icon: GraduationCap, label: 'Requisitos' },
 ];
 
+const profesorNavItems = [
+  { path: '/profesor', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/profesor/calificaciones', icon: FileText, label: 'Calificaciones' },
+];
+
 export default function Sidebar({ isOpen, setIsOpen }) {
   const location = useLocation();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isProfesor } = useAuth();
 
-  const navItems = isAdmin ? adminNavItems : alumnoNavItems;
+  const navItems = isAdmin ? adminNavItems : isProfesor ? profesorNavItems : alumnoNavItems;
+  const defaultPath = isAdmin ? '/admin' : isProfesor ? '/profesor' : '/alumno';
 
   const handleLogout = async () => {
     await logout();
@@ -59,7 +71,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       >
         {/* Logo */}
         <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <Link to={isAdmin ? '/admin' : '/alumno'} className="flex items-center gap-2">
+          <Link to={defaultPath} className="flex items-center gap-2">
             <img src="/logo.png" alt="FV Logo" className="w-10 h-10" />
             <span className="text-white font-bold text-lg hidden lg:block">Portal FV</span>
           </Link>

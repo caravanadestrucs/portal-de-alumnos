@@ -273,7 +273,7 @@ export default function AdminAlumnos() {
             </select>
           </div>
 
-          {!editingAlumno && (
+          {!editingAlumno ? (
             <Input
               label="Contraseña"
               name="password"
@@ -283,6 +283,27 @@ export default function AdminAlumnos() {
               required
               helper="Mínimo 6 caracteres"
             />
+          ) : (
+            <div className="space-y-2">
+              <Input
+                label="Nueva Contraseña (dejar vacío para mantener la actual)"
+                name="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                helper="Mínimo 6 caracteres"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const newPassword = Math.random().toString(36).slice(-6);
+                  setFormData({ ...formData, password: newPassword });
+                }}
+                className="text-sm text-primary-600 hover:text-primary-700"
+              >
+                🔄 Generar contraseña aleatoria
+              </button>
+            </div>
           )}
         </form>
       </Modal>

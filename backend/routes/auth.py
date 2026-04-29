@@ -8,7 +8,7 @@ from flask_jwt_extended import (
 )
 from datetime import datetime, timedelta
 
-from models import db, Admin, Alumno
+from models import db, Admin, Alumno, Profesor
 from utils.security import generate_tokens, validate_email, validate_numero_control
 from utils.decorators import admin_required, alumno_required
 
@@ -44,6 +44,26 @@ def login():
                 'username': admin.username,
                 'nombre': admin.nombre,
                 'email': admin.email
+            },
+            **tokens
+        }), 200
+    
+    # Buscar en profesores
+    profesor = Profesor.query.filter_by(email=email).first()
+    if profesor and profesor.check_password(password):
+        if not profesor.activo:
+            return jsonify({'error': 'Tu cuenta está desactivada. Contacta al administrador.'}), 403
+        
+        tokens = generate_tokens(profesor.id, 'profesor')
+        return jsonify({
+            'message': 'Login exitoso',
+            'user': {
+                'type': 'profesor',
+                'id': profesor.id,
+                'numero_empleado': profesor.numero_empleado,
+                'nombre': f'{profesor.nombre} {profesor.apellido_paterno}',
+                'email': profesor.email,
+                'titulo': profesor.titulo or '',
             },
             **tokens
         }), 200

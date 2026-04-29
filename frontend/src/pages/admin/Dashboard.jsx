@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card';
 import { getAlumnos } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
 import { getMaterias } from '../../api/materias';
+import { getAlumnosConPagosPendientes } from '../../api/pagos';
 import {
   Users,
   GraduationCap,
@@ -23,23 +24,27 @@ export default function AdminDashboard() {
     carreras: 0,
     materias: 0,
     pagosPendientes: 0,
+    alumnosConDeuda: 0,
+    totalAdeudo: 0,
   });
 
   useEffect(() => {
-    // Load stats
     const loadStats = async () => {
       try {
-        const [alumnos, carreras, materias] = await Promise.all([
+        const [alumnos, carreras, materias, pagosData] = await Promise.all([
           getAlumnos().catch(() => []),
           getCarreras().catch(() => []),
           getMaterias().catch(() => []),
+          getAlumnosConPagosPendientes().catch(() => ({ alumnos: [], total_adeudo: 0 })),
         ]);
 
         setStats({
           alumnos: Array.isArray(alumnos) ? alumnos.length : 0,
           carreras: Array.isArray(carreras) ? carreras.length : 0,
           materias: Array.isArray(materias) ? materias.length : 0,
-          pagosPendientes: 0,
+          pagosPendientes: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
+          alumnosConDeuda: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
+          totalAdeudo: pagosData.total_adeudo || 0,
         });
       } catch (error) {
         console.error('Error loading stats:', error);
@@ -72,8 +77,9 @@ export default function AdminDashboard() {
       path: '/admin/materias',
     },
     {
-      title: 'Pagos Pendientes',
-      value: stats.pagosPendientes,
+      title: 'Alumnos Deuda',
+      value: stats.alumnosConDeuda,
+      subtitle: `$${stats.totalAdeudo.toLocaleString('es-MX', { minimumFractionDigits: 2 })} total`,
       icon: CreditCard,
       color: 'from-orange-500 to-orange-600',
       path: '/admin/pagos',
@@ -135,6 +141,11 @@ export default function AdminDashboard() {
                   <p className="text-3xl font-bold text-gray-800 mt-1">
                     {stat.value}
                   </p>
+                  {stat.subtitle && (
+                    <p className="text-xs text-orange-600 font-medium mt-1">
+                      {stat.subtitle}
+                    </p>
+                  )}
                 </div>
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg`}>
                   <Icon size={24} className="text-white" />

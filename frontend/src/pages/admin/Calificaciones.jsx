@@ -14,8 +14,6 @@ export default function AdminCalificaciones() {
   const [calificaciones, setCalificaciones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [periodo, setPeriodo] = useState('2026-1');
-  const [anio, setAnio] = useState(new Date().getFullYear());
 
   useEffect(() => {
     if (selectedAlumno) {
@@ -62,9 +60,9 @@ export default function AdminCalificaciones() {
           asistencia_5: cal.asistencia_5,
           practica_1: cal.practica_1,
           practica_2: cal.practica_2,
+          extra_1: cal.extra_1,
+          extra_2: cal.extra_2,
           calificacion_final: cal.calificacion_final,
-          periodo,
-          anio,
         });
       }
       alert('Calificaciones guardadas exitosamente');
@@ -76,9 +74,9 @@ export default function AdminCalificaciones() {
   };
 
   const getGradeClass = (grade) => {
-    if (grade === null || grade === undefined) return 'grade-pending';
-    if (grade >= 13) return 'grade-approved';
-    return 'grade-failed';
+    if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
+    if (grade >= 6) return 'text-green-600 font-bold';
+    return 'text-red-500';
   };
 
   return (
@@ -93,7 +91,7 @@ export default function AdminCalificaciones() {
 
       {/* Filters */}
       <Card>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Seleccionar Alumno
@@ -107,42 +105,9 @@ export default function AdminCalificaciones() {
               {Array.isArray(alumnos) &&
                 alumnos.map((alumno) => (
                   <option key={alumno.id} value={alumno.id}>
-                    {alumno.numero_control} - {alumno.nombre}{' '}
-                    {alumno.apellido_paterno}
+                    {alumno.nombre} {alumno.apellido_paterno} {alumno.apellido_materno} ({alumno.numero_control})
                   </option>
                 ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Período
-            </label>
-            <select
-              value={periodo}
-              onChange={(e) => setPeriodo(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="2026-1">2026-1</option>
-              <option value="2025-2">2025-2</option>
-              <option value="2025-1">2025-1</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Año
-            </label>
-            <select
-              value={anio}
-              onChange={(e) => setAnio(parseInt(e.target.value))}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              {[2026, 2025, 2024, 2023].map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
             </select>
           </div>
         </div>
@@ -205,6 +170,12 @@ export default function AdminCalificaciones() {
                         Prác. 2
                       </th>
                       <th className="text-center py-3 px-2 font-semibold text-gray-700 w-20">
+                        Extra 1
+                      </th>
+                      <th className="text-center py-3 px-2 font-semibold text-gray-700 w-20">
+                        Extra 2
+                      </th>
+                      <th className="text-center py-3 px-2 font-semibold text-gray-700 w-20">
                         Final
                       </th>
                     </tr>
@@ -240,7 +211,7 @@ export default function AdminCalificaciones() {
                           <input
                             type="number"
                             min="0"
-                            max="20"
+                            max="10"
                             value={cal.practica_1 || ''}
                             onChange={(e) =>
                               handleCalificacionChange(
@@ -258,7 +229,7 @@ export default function AdminCalificaciones() {
                           <input
                             type="number"
                             min="0"
-                            max="20"
+                            max="10"
                             value={cal.practica_2 || ''}
                             onChange={(e) =>
                               handleCalificacionChange(
@@ -276,7 +247,43 @@ export default function AdminCalificaciones() {
                           <input
                             type="number"
                             min="0"
-                            max="20"
+                            max="10"
+                            value={cal.extra_1 || ''}
+                            onChange={(e) =>
+                              handleCalificacionChange(
+                                cal.id,
+                                'extra_1',
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                              cal.extra_1
+                            )}`}
+                          />
+                        </td>
+                        <td className="text-center py-3 px-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={cal.extra_2 || ''}
+                            onChange={(e) =>
+                              handleCalificacionChange(
+                                cal.id,
+                                'extra_2',
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                              cal.extra_2
+                            )}`}
+                          />
+                        </td>
+                        <td className="text-center py-3 px-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="10"
                             value={cal.calificacion_final || ''}
                             onChange={(e) =>
                               handleCalificacionChange(

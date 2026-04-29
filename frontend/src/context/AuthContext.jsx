@@ -8,22 +8,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initAuth = () => {
-      const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
+    // Restore session from localStorage on mount
+    const token = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
 
-      if (token && storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch (error) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-        }
+    if (token && storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
-      setLoading(false);
-    };
-
-    initAuth();
+    }
+    setLoading(false);
   }, []);
 
   const login = async (email, password) => {
@@ -41,7 +39,7 @@ export function AuthProvider({ children }) {
     try {
       await authApi.logout();
     } catch (error) {
-      // Ignore logout errors
+      console.error('Logout error:', error);
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -62,6 +60,7 @@ export function AuthProvider({ children }) {
     register,
     isAdmin: user?.type === 'admin',
     isAlumno: user?.type === 'alumno',
+    isProfesor: user?.type === 'profesor',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

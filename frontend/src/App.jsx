@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToasterProvider } from './components/ui/Toast';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -16,12 +17,20 @@ import AdminMaterias from './pages/admin/Materias';
 import AdminCalificaciones from './pages/admin/Calificaciones';
 import AdminPagos from './pages/admin/Pagos';
 import AdminExport from './pages/admin/Export';
+import AdminProfesores from './pages/admin/Profesores';
+import AdminGrupos from './pages/admin/Grupos';
+import AdminAsignaciones from './pages/admin/Asignaciones';
+import AdminRequisitos from './pages/admin/Requisitos';
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
 import MisCalificaciones from './pages/alumno/MisCalificaciones';
 import MisPagos from './pages/alumno/MisPagos';
 import Requisitos from './pages/alumno/Requisitos';
+
+// Profesor Pages
+import ProfesorDashboard from './pages/profesor/Dashboard';
+import ProfesorCalificaciones from './pages/profesor/Calificaciones';
 
 // Protected Route Component
 function ProtectedRoute({ children, allowedRole }) {
@@ -40,7 +49,7 @@ function ProtectedRoute({ children, allowedRole }) {
   }
 
   if (allowedRole && user.type !== allowedRole) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : '/alumno'} replace />;
+    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
   }
 
   return children;
@@ -59,7 +68,7 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : '/alumno'} replace />;
+    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
   }
 
   return children;
@@ -69,62 +78,81 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
-                <Login />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/signup"
-            element={
-              <PublicRoute>
-                <Register />
-              </PublicRoute>
-            }
-          />
+        <ToasterProvider>
+          <Routes>
+            {/* Public Routes */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <PublicRoute>
+                  <Register />
+                </PublicRoute>
+              }
+            />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRole="admin">
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AdminDashboard />} />
-            <Route path="alumnos" element={<AdminAlumnos />} />
-            <Route path="carreras" element={<AdminCarreras />} />
-            <Route path="materias" element={<AdminMaterias />} />
-            <Route path="calificaciones" element={<AdminCalificaciones />} />
-            <Route path="pagos" element={<AdminPagos />} />
-            <Route path="exportar" element={<AdminExport />} />
-          </Route>
+            {/* Admin Routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRole="admin">
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AdminDashboard />} />
+              <Route path="alumnos" element={<AdminAlumnos />} />
+              <Route path="carreras" element={<AdminCarreras />} />
+              <Route path="materias" element={<AdminMaterias />} />
+              <Route path="calificaciones" element={<AdminCalificaciones />} />
+              <Route path="pagos" element={<AdminPagos />} />
+              <Route path="profesores" element={<AdminProfesores />} />
+              <Route path="grupos" element={<AdminGrupos />} />
+              <Route path="asignaciones" element={<AdminAsignaciones />} />
+              <Route path="requisitos" element={<AdminRequisitos />} />
+              <Route path="exportar" element={<AdminExport />} />
+            </Route>
 
-          {/* Alumno Routes */}
-          <Route
-            path="/alumno"
-            element={
-              <ProtectedRoute allowedRole="alumno">
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AlumnoDashboard />} />
-            <Route path="calificaciones" element={<MisCalificaciones />} />
-            <Route path="pagos" element={<MisPagos />} />
-            <Route path="requisitos" element={<Requisitos />} />
-          </Route>
+            {/* Alumno Routes */}
+            <Route
+              path="/alumno"
+              element={
+                <ProtectedRoute allowedRole="alumno">
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AlumnoDashboard />} />
+              <Route path="calificaciones" element={<MisCalificaciones />} />
+              <Route path="pagos" element={<MisPagos />} />
+              <Route path="requisitos" element={<Requisitos />} />
+            </Route>
 
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+            {/* Profesor Routes */}
+            <Route
+              path="/profesor"
+              element={
+                <ProtectedRoute allowedRole="profesor">
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<ProfesorDashboard />} />
+              <Route path="calificaciones" element={<ProfesorCalificaciones />} />
+            </Route>
+
+            {/* Default redirect */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </ToasterProvider>
       </AuthProvider>
     </BrowserRouter>
   );

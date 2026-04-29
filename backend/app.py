@@ -53,6 +53,11 @@ def create_app(config_name=None):
     from routes.calificaciones import calificaciones_bp
     from routes.pagos import pagos_bp
     from routes.export import export_bp
+    from routes.profesores import profesores_bp
+    from routes.grupos import grupos_bp
+    from routes.asignaciones import asignaciones_bp
+    from routes.profesor import profesor_bp
+    from routes.practicas import practicas_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(alumnos_bp, url_prefix='/api/alumnos')
@@ -61,6 +66,11 @@ def create_app(config_name=None):
     app.register_blueprint(calificaciones_bp, url_prefix='/api/calificaciones')
     app.register_blueprint(pagos_bp, url_prefix='/api/pagos')
     app.register_blueprint(export_bp, url_prefix='/api/export')
+    app.register_blueprint(profesores_bp, url_prefix='/api/profesores')
+    app.register_blueprint(grupos_bp, url_prefix='/api/grupos')
+    app.register_blueprint(asignaciones_bp, url_prefix='/api/asignaciones')
+    app.register_blueprint(profesor_bp, url_prefix='/api/profesor')
+    app.register_blueprint(practicas_bp, url_prefix='/api/practicas')
     
     # Health check endpoint
     @app.route('/api/health')
