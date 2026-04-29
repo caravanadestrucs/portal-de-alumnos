@@ -26,6 +26,7 @@ const adminNavItems = [
   { path: '/admin/profesores', icon: UserCheck, label: 'Profesores' },
   { path: '/admin/grupos', icon: FolderCog, label: 'Grupos' },
   { path: '/admin/asignaciones', icon: ClipboardList, label: 'Asignaciones' },
+  { path: '/admin/admins', icon: UserCheck, label: 'Administradores' },
   { path: '/admin/requisitos', icon: GraduationCap, label: 'Requisitos' },
   { path: '/admin/exportar', icon: Download, label: 'Exportar' },
 ];
@@ -99,7 +100,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
                 }`}
               >
                 <Icon size={20} />
-                <span className="hidden lg:block">{item.label}</span>
+                <span className={`${isOpen ? 'block' : 'hidden'} lg:block`}>{item.label}</span>
               </Link>
             );
           })}

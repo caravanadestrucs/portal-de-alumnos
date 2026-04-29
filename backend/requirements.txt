@@ -4,4 +4,6 @@ flask-cors
 flask-jwt-extended
 sqlalchemy
 flask-sqlalchemy
+flask-migrate
 bcrypt
+openpyxl

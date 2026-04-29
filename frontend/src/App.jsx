@@ -20,6 +20,7 @@ import AdminExport from './pages/admin/Export';
 import AdminProfesores from './pages/admin/Profesores';
 import AdminGrupos from './pages/admin/Grupos';
 import AdminAsignaciones from './pages/admin/Asignaciones';
+import AdminAdmins from './pages/admin/Admins';
 import AdminRequisitos from './pages/admin/Requisitos';
 
 // Alumno Pages
@@ -116,6 +117,7 @@ function App() {
               <Route path="profesores" element={<AdminProfesores />} />
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
+              <Route path="admins" element={<AdminAdmins />} />
               <Route path="requisitos" element={<AdminRequisitos />} />
               <Route path="exportar" element={<AdminExport />} />
             </Route>

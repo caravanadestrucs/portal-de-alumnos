@@ -6,7 +6,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "5000:5000"
+      - "5050:5000"
     volumes:
       - ./backend:/app
       - ./backend/portal.db:/app/portal.db  # Persistir DB
@@ -23,12 +23,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3050:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:5000
+      - VITE_API_URL=http://localhost:5050
     restart: unless-stopped
     depends_on:
       - backend
