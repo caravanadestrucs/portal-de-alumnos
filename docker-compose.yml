@@ -24,7 +24,7 @@ services:
     ports:
       - "3050:3000"
     volumes:
-      - ./frontend:/app   # hot reload
+      - ./frontend:/app
     environment:
       - VITE_API_URL=http://localhost:5050
     restart: unless-stopped
@@ -32,7 +32,7 @@ services:
       - backend
     networks:
       - portal-network
-    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -lc "npm install && chmod -R 755 node_modules/.bin && npm run dev -- --host 0.0.0.0"
 
 networks:
   portal-network:
