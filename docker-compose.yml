@@ -9,11 +9,11 @@ services:
       - "5050:5000"
     volumes:
       - backend_data:/app
-      - backend_db:/app/portal.db
+      - backend_db:/app/data   # <-- carpeta, no archivo
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
-      - DATABASE_URL=sqlite:///app/portal.db
+      - DATABASE_URL=sqlite:///app/data/portal.db
     restart: unless-stopped
     networks:
       - portal-network
