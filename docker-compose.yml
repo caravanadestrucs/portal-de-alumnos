@@ -32,7 +32,7 @@ services:
       - backend
     networks:
       - portal-network
-    command: sh -lc "npm install && chmod -R 755 node_modules/.bin && npm run dev -- --host 0.0.0.0"
+    command: sh -lc " npm install && npm install -D tailwindcss postcss autoprefixer && chmod -R 755 node_modules/.bin && npm run dev -- --host 0.0.0.0"
 
 networks:
   portal-network:
