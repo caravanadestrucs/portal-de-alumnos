@@ -7,3 +7,4 @@ flask-sqlalchemy
 flask-migrate
 bcrypt
 openpyxl
+
