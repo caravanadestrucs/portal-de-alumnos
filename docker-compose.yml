@@ -8,7 +8,7 @@ services:
     ports:
       - "5050:5000"
     volumes:
-      - ./backend:/app
+      - portal-db:/app/instance
     environment:
       - FLASK_APP=app.py
       - DATABASE_URL=sqlite:////app/instance/portal.db
@@ -41,3 +41,4 @@ networks:
 
 volumes:
   portal-network:
+  portal-db:
