@@ -1,4 +1,4 @@
-FROM node:18-bullseye/
+FROM node:18-bullseye
 
 WORKDIR /app/
 
@@ -14,7 +14,7 @@ RUN npm install --legacy-peer-deps/
 # Install vite GLOBALLY (avoids permission issues)
 RUN npm install -g vite/
 
-# Copy the rest of the code
+# Copy the rest of the code (node_modules is ignored by .dockerignore)
 COPY . ./
 
 # Build for production using the GLOBAL vite path
