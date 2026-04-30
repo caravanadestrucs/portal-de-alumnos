@@ -1,35 +1,30 @@
-FROM node:18 as builder
+FROM node:18-bullseye/
 
-WORKDIR /app
+WORKDIR /app/
 
-# ARG para Vite (necesita estar disponible en build time)
-ARG VITE_API_URL=http://localhost:5000/api
+# ARG for Vite (needs to be available at build time)
+ARG VITE_API_URL=http://localhost:5000/api/
 
-# Copiar archivos de dependencias PRIMERO (para aprovechar cache)
+# Copy dependency files FIRST (to leverage cache)
 COPY package*.json ./
 
-# Instalar dependencias
-RUN npm install
+# Install dependencies
+RUN npm install --legacy-peer-deps/
 
-# Copiar el resto del código
-COPY . .
+# Install vite GLOBALLY (avoids permission issues)
+RUN npm install -g vite/
 
-# Build de producción (usar npx para evitar problemas de permisos)
-RUN npx vite build
+# Copy the rest of the code
+COPY . ./
 
-# --- Imagen final ligera ---
-FROM node:18
+# Build for production using the GLOBAL vite path
+RUN /usr/local/bin/vite build/
 
-WORKDIR /app
+# Install serve to serve static files
+RUN npm install -g serve/
 
-# Instalar serve para servir archivos estáticos
-RUN npm install -g serve
+# Expose the port
+EXPOSE 3000/
 
-# Copiar solo el build de la etapa anterior
-COPY --from=builder /app/dist ./dist
-
-# Exponer el puerto
-EXPOSE 3000
-
-# Servir con serve
+# Serve with serve
 CMD ["serve", "-l", "3000", "-s", "dist"]
