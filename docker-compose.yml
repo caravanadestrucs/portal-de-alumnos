@@ -24,6 +24,11 @@ services:
       - "3050:3000"
     environment:
       - VITE_API_URL=http://89.116.51.59:5050
+      - CHOKIDAR_USEPOLLING=true
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
     restart: unless-stopped
     depends_on:
       - backend
