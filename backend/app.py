@@ -39,9 +39,17 @@ def create_app(config_name=None):
     
     # Inicializar extensiones
     CORS(app, 
-         resources={r"/*": {"origins": "*"}},
+         supports_credentials=True,
+         origins=[
+             "http://localhost:3000",
+             "http://127.0.0.1:3000",
+             "http://localhost:3050",
+             "http://127.0.0.1:3050",
+             "http://89.116.51.59:3050",
+             "http://89.116.51.59:5050"
+         ],
          allow_headers=["Content-Type", "Authorization", "Accept"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     )
     JWTManager(app)
     Migrate(app, db)
