@@ -1,11 +1,11 @@
-FROM node:18-alpine as builder
+FROM node:18 as builder
 
 WORKDIR /app
 
 # ARG para Vite (necesita estar disponible en build time)
 ARG VITE_API_URL=http://localhost:5000/api
 
-# Copiar archivos de dependencias
+# Copiar archivos de dependencias PRIMERO (para aprovechar cache)
 COPY package*.json ./
 
 # Instalar dependencias
@@ -14,14 +14,11 @@ RUN npm install
 # Copiar el resto del código
 COPY . .
 
-# Imprimir para depuración
-RUN echo "API URL: $VITE_API_URL"
-
-# Build de producción
-RUN npm run build
+# Build de producción (usar npx para evitar problemas de permisos)
+RUN npx vite build
 
 # --- Imagen final ligera ---
-FROM node:18-alpine
+FROM node:18
 
 WORKDIR /app
 
