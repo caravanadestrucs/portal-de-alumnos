@@ -7,6 +7,8 @@ COPY package*.json ./
 
 # Instalar dependencias
 RUN npm install
+# Dar permisos de ejecución a vite
+RUN chmod +x node_modules/.bin/vite
 
 # Copiar el resto del código
 COPY . .
