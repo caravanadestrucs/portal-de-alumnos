@@ -8,11 +8,11 @@ services:
     ports:
       - "5050:5000"
     volumes:
-      - backend_db:/app/data
+      - ./backend:/app
+      - ./db:/app/data  # DB sin espacios en el path
     environment:
       - FLASK_APP=app.py
-      - FLASK_ENV=development
-      - DATABASE_URL=sqlite:////app/data/portal.db
+      - DATABASE_URL=sqlite:///app/data/portal.db
     restart: unless-stopped
     networks:
       - portal-network
@@ -24,7 +24,7 @@ services:
     ports:
       - "3050:3000"
     volumes:
-      - frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     environment:
       - VITE_API_URL=http://89.116.51.59:5050
@@ -33,7 +33,7 @@ services:
       - backend
     networks:
       - portal-network
-    command:  sh -lc "chmod -R 755 node_modules/.bin && npm run dev -- --host 0.0.0.0 "
+    command: sh -lc "chmod +x ./node_modules/.bin/vite || true; npm run dev -- --host 0.0.0.0"
 
 networks:
   portal-network:

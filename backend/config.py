@@ -25,10 +25,16 @@ class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""
     DEBUG = True
     ENV = 'development'
-    # Ruta absoluta para SQLite en Windows
-    _db_path = r'C:\Users\Dario\Desktop\portal de alumnos\backend\instance\portal.db'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        f'sqlite:///{_db_path}'
+    
+    # Usar DATABASE_URL si está definida (Docker), sino usar path local
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        SQLALCHEMY_DATABASE_URI = db_url
+    else:
+        # Windows local path
+        _db_path = r'C:\Users\Dario\Desktop\portal de alumnos\backend\instance\portal.db'
+        SQLALCHEMY_DATABASE_URI = f'sqlite:///{_db_path}'
+    
     SQLALCHEMY_ECHO = False
 
 
@@ -38,7 +44,6 @@ class ProductionConfig(Config):
     ENV = 'production'
     
     # MySQL connection string
-    # Formato: mysql+pymysql://user:password@host:port/database
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
     MYSQL_PORT = os.environ.get('MYSQL_PORT', '3306')
     MYSQL_USER = os.environ.get('MYSQL_USER', 'portal_user')
