@@ -16,11 +16,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del backend
 COPY . .
 
-# Crear carpeta de datos y asegurar permisos
-RUN mkdir -p /app/data && chmod -R 777 /app
+# Copiar entrypoint y dar permisos
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Crear carpeta de datos
+RUN mkdir -p /app/data
 
 # Exponer el puerto
 EXPOSE 5000
 
-# Usar gunicorn para producción/estable
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+# Usar entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]

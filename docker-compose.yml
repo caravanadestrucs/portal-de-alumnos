@@ -8,8 +8,7 @@ services:
     ports:
       - "5050:5000"
     volumes:
-      - ./backend:/app
-      - ./db:/app/data  # DB sin espacios en el path
+      - backend_data:/app/data  # Volumen Docker (sin rutas Windows)
     environment:
       - FLASK_APP=app.py
       - DATABASE_URL=sqlite:///app/data/portal.db
@@ -33,12 +32,11 @@ services:
       - backend
     networks:
       - portal-network
-    command: sh -lc "chmod +x ./node_modules/.bin/vite || true; npm run dev -- --host 0.0.0.0"
+    command: sh -c "chmod +x ./node_modules/.bin/vite || true; npm run dev -- --host 0.0.0.0"
 
 networks:
   portal-network:
     driver: bridge
 
 volumes:
-  backend_db:
-  frontend:
+  backend_data:  # Volumen persistente para la DB
