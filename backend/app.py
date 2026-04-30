@@ -38,7 +38,11 @@ def create_app(config_name=None):
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
     
     # Inicializar extensiones
-    CORS(app, supports_credentials=True)
+    CORS(app, 
+         resources={r"/*": {"origins": "*"}},
+         allow_headers=["Content-Type", "Authorization", "Accept"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    )
     JWTManager(app)
     Migrate(app, db)
     
