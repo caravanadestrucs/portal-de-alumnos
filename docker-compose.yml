@@ -23,7 +23,7 @@ services:
     ports:
       - "3050:3000"
     environment:
-      - VITE_API_URL=http://89.116.51.59:5050
+      - VITE_API_URL=http://89.116.51.59:5050/api
       - CHOKIDAR_USEPOLLING=true
     ulimits:
       nofile:
