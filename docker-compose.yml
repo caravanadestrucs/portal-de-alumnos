@@ -8,10 +8,10 @@ services:
     ports:
       - "5050:5000"
     volumes:
-      - backend_data:/app/data  # Volumen Docker (sin rutas Windows)
+      - ./backend:/app
     environment:
       - FLASK_APP=app.py
-      - DATABASE_URL=sqlite:///app/data/portal.db
+      - DATABASE_URL=sqlite:////app/instance/portal.db
     restart: unless-stopped
     networks:
       - portal-network
@@ -39,4 +39,4 @@ networks:
     driver: bridge
 
 volumes:
-  backend_data:  # Volumen persistente para la DB
+  portal-network:
