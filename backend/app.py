@@ -47,7 +47,9 @@ def create_app(config_name=None):
              "http://127.0.0.1:3050",
              "http://89.116.51.59:3050",
              "http://89.116.51.59:5050",
-             "http://localhost:5173"  # <-- agregado para Vite
+             "http://localhost:5173",  # <-- agregado para Vite
+             "https://alumnos.felipe-villa-nueva-teotitlan.site",
+             "http://alumnos.felipe-villa-nueva-teotitlan.site"
          ],
          allow_headers=["Content-Type", "Authorization", "Accept"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
