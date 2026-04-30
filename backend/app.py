@@ -95,6 +95,36 @@ def create_app(config_name=None):
             'version': '1.0.0'
         })
     
+    # Setup endpoint (solo para crear primer admin)
+    @app.route('/api/setup', methods=['GET', 'POST'])
+    def setup_admin():
+        """Crea el admin por defecto si no existe"""
+        from models import Admin
+        
+        if Admin.query.first():
+            return jsonify({'message': 'Ya existe un administrador'}), 200
+        
+        try:
+            admin = Admin(
+                username='admin',
+                email='admin@universidadfv.edu.mx',
+                nombre='Administrador Principal'
+            )
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Administrador creado',
+                'credentials': {
+                    'email': 'admin@universidadfv.edu.mx',
+                    'password': 'admin123'
+                }
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
     # Root endpoint
     @app.route('/')
     def index():
