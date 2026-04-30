@@ -1,4 +1,4 @@
-FROM node:18-alpine as builder
+FROM node:18-alpine
 
 WORKDIR /app
 
@@ -14,11 +14,5 @@ COPY . .
 # Exponer el puerto
 EXPOSE 3000
 
-# Build de producción
-RUN npm run build
-
-# Servir con un servidor estático ligero (serve)
-RUN npm install -g serve
-
-# Comando para producción
-CMD ["serve", "-l", "3000", "-s", "dist"]
+# Comando para desarrollo
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
