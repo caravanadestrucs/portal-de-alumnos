@@ -46,7 +46,8 @@ def create_app(config_name=None):
              "http://localhost:3050",
              "http://127.0.0.1:3050",
              "http://89.116.51.59:3050",
-             "http://89.116.51.59:5050"
+             "http://89.116.51.59:5050",
+             "http://localhost:5173"  # <-- agregado para Vite
          ],
          allow_headers=["Content-Type", "Authorization", "Accept"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]

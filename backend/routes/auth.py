@@ -15,12 +15,15 @@ from utils.decorators import admin_required, alumno_required
 auth_bp = Blueprint('auth', __name__)
 
 
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
     """
     Inicio de sesión para admin o alumno
     Body: { email, password }
     """
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     data = request.get_json()
     
     if not data:
