@@ -27,7 +27,7 @@ const adminNavItems = [
   { path: '/admin/grupos', icon: FolderCog, label: 'Grupos' },
   { path: '/admin/asignaciones', icon: ClipboardList, label: 'Asignaciones' },
   { path: '/admin/admins', icon: UserCheck, label: 'Administradores' },
-  { path: '/admin/requisitos', icon: GraduationCap, label: 'Requisitos' },
+  // { path: '/admin/requisitos', icon: GraduationCap, label: 'Requisitos' },
   { path: '/admin/exportar', icon: Download, label: 'Exportar' },
 ];
 

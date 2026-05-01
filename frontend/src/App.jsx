@@ -118,7 +118,7 @@ function App() {
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
               <Route path="admins" element={<AdminAdmins />} />
-              <Route path="requisitos" element={<AdminRequisitos />} />
+              {/* <Route path="requisitos" element={<AdminRequisitos />} /> */}
               <Route path="exportar" element={<AdminExport />} />
             </Route>
 
