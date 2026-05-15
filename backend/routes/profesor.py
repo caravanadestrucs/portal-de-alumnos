@@ -52,7 +52,7 @@ def get_calificaciones_asignacion(asignacion_id):
             calif = Calificacion(
                 alumno_id=integ.alumno_id,
                 materia_id=asignacion.materia_id,
-                periodo='Actual',
+                periodo=f"Enero-Abril {datetime.now().year}",
                 anio=datetime.now().year
             )
             db.session.add(calif)
@@ -101,7 +101,7 @@ def update_calificaciones(asignacion_id):
         calif = Calificacion(
             alumno_id=alumno_id,
             materia_id=asignacion.materia_id,
-            periodo='Actual',
+            periodo=f"Enero-Abril {datetime.now().year}",
             anio=datetime.now().year
         )
         db.session.add(calif)

@@ -200,15 +200,15 @@ class Calificacion(db.Model):
     asistencia_4 = db.Column(db.Integer, default=0)
     asistencia_5 = db.Column(db.Integer, default=0)
     
-    # Prácticas (0-20)
+    # Prácticas (0-10)
     practica_1 = db.Column(db.Float, default=0)
     practica_2 = db.Column(db.Float, default=0)
-    
+
     # Extra (recuperación, ordinario, etc.)
     extra_1 = db.Column(db.Float, default=0)
     extra_2 = db.Column(db.Float, default=0)
-    
-    # Calificación final (0-20)
+
+    # Calificación final (0-10)
     calificacion_final = db.Column(db.Float, default=0)
     
     periodo = db.Column(db.String(20))  # ej: "Enero-Abril 2026"
@@ -245,6 +245,11 @@ class Calificacion(db.Model):
             'alumno_id': self.alumno_id,
             'materia_id': self.materia_id,
             'materia': self.materia.to_dict() if self.materia else None,
+            'asistencia_1': self.asistencia_1,
+            'asistencia_2': self.asistencia_2,
+            'asistencia_3': self.asistencia_3,
+            'asistencia_4': self.asistencia_4,
+            'asistencia_5': self.asistencia_5,
             'asistencia': {
                 '1': self.asistencia_1,
                 '2': self.asistencia_2,

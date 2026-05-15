@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 
-from models import db, Alumno, Carrera, Calificacion
+from models import db, Alumno, Carrera, Materia, Calificacion
 from utils.decorators import admin_required, get_admin_or_403
 
 alumnos_bp = Blueprint('alumnos', __name__)
@@ -115,6 +115,30 @@ def create_alumno():
         alumno.set_password(data['password'])
         
         db.session.add(alumno)
+        db.session.flush()  # Obtener el ID del alumno
+        
+        # Crear boletas (calificaciones) para todas las materias de su carrera
+        materias = Materia.query.filter_by(carrera_id=data['carrera_id']).all()
+        periodo_actual = f"Enero-Abril {datetime.now().year}"
+        for materia in materias:
+            calif = Calificacion(
+                alumno_id=alumno.id,
+                materia_id=materia.id,
+                asistencia_1=0,
+                asistencia_2=0,
+                asistencia_3=0,
+                asistencia_4=0,
+                asistencia_5=0,
+                practica_1=0,
+                practica_2=0,
+                extra_1=0,
+                extra_2=0,
+                calificacion_final=0,
+                periodo=periodo_actual,
+                anio=datetime.now().year
+            )
+            db.session.add(calif)
+        
         db.session.commit()
         
         return jsonify({

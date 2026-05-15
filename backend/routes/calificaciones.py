@@ -166,8 +166,8 @@ def get_historial(alumno_id):
     
     # Calcular estadísticas
     total_calificaciones = len(calificaciones)
-    materias_aprobadas = sum(1 for c in calificaciones if c.calificacion_final >= 13)
-    materias_reprobadas = sum(1 for c in calificaciones if c.calificacion_final > 0 and c.calificacion_final < 13)
+    materias_aprobadas = sum(1 for c in calificaciones if c.calificacion_final >= 8)
+    materias_reprobadas = sum(1 for c in calificaciones if c.calificacion_final > 0 and c.calificacion_final < 8)
     
     promedios = [c.calificacion_final for c in calificaciones if c.calificacion_final > 0]
     promedio_general = round(sum(promedios) / len(promedios), 1) if promedios else 0

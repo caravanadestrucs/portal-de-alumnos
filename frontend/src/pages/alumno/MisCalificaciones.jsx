@@ -31,10 +31,10 @@ export default function MisCalificaciones() {
     loadCalificaciones();
   }, [user]);
 
-  // Escala 0-10, aprobado >= 7
+  // Escala 0-10, aprobado >= 8
   const getGradeClass = (grade) => {
     if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
-    if (grade >= 6) return 'text-green-600 font-bold';
+    if (grade >= 8) return 'text-green-600 font-bold';
     return 'text-red-500';
   };
 
@@ -48,7 +48,7 @@ export default function MisCalificaciones() {
   const getEstado = (cal) => {
     const final = getCalificacionFinal(cal);
     if (!final || final === 0) return { text: 'Sin calificar', variant: 'default' };
-    return final >= 7 
+    return final >= 8 
       ? { text: 'Aprobado', variant: 'success' }
       : { text: 'Reprobado', variant: 'danger' };
   };
@@ -65,7 +65,7 @@ export default function MisCalificaciones() {
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Mis Calificaciones</h1>
         <p className="text-gray-500 mt-1">
-          Historial académico - Escala 0-10 (mínimo 7 para aprobar)
+          Historial académico - Escala 0-10 (mínimo 8 para aprobar)
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function MisCalificaciones() {
           <TrendingUp size={28} className="mx-auto text-green-500 mb-2" />
           <p className="text-sm text-gray-500">Aprobadas</p>
           <p className="text-2xl font-bold text-green-600">
-            {calificaciones.filter(c => getCalificacionFinal(c) >= 7).length}
+            {calificaciones.filter(c => getCalificacionFinal(c) >= 8).length}
           </p>
         </Card>
       </div>

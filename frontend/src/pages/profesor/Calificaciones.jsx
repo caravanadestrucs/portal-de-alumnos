@@ -220,7 +220,7 @@ function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, saving }) {
     if (campo.includes('asistencia_')) {
       return val === 1 ? 'text-green-600' : 'text-red-500';
     }
-    return val >= 13 ? 'text-green-600 font-bold' : 'text-red-500';
+    return val >= 8 ? 'text-green-600 font-bold' : 'text-red-500';
   };
 
   return (

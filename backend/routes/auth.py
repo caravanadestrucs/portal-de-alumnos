@@ -8,7 +8,7 @@ from flask_jwt_extended import (
 )
 from datetime import datetime, timedelta
 
-from models import db, Admin, Alumno, Profesor
+from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion
 from utils.security import generate_tokens, validate_email, validate_numero_control
 from utils.decorators import admin_required, alumno_required
 
@@ -145,6 +145,20 @@ def register():
         alumno.set_password(data['password'])
         
         db.session.add(alumno)
+        db.session.flush()  # Obtener ID del alumno
+        
+        # Crear boletas para todas las materias de su carrera
+        materias = Materia.query.filter_by(carrera_id=data['carrera_id']).all()
+        periodo_actual = f"Enero-Abril {datetime.now().year}"
+        for materia in materias:
+            calif = Calificacion(
+                alumno_id=alumno.id,
+                materia_id=materia.id,
+                periodo=periodo_actual,
+                anio=datetime.now().year
+            )
+            db.session.add(calif)
+        
         db.session.commit()
         
         # Generar tokens para login automático

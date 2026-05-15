@@ -311,11 +311,11 @@ export default function AdminCalificaciones() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 rounded grade-approved"></div>
-                  <span className="text-gray-500">Aprobado (≥13)</span>
+                  <span className="text-gray-500">Aprobado (≥8)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 rounded grade-failed"></div>
-                  <span className="text-gray-500">Reprobado (&lt;13)</span>
+                  <span className="text-gray-500">Reprobado (&lt;8)</span>
                 </div>
               </div>
             </Card>
