@@ -2,8 +2,8 @@
 Rutas para gestión de Asignaciones
 (profesor → materia → grupo → fechas)
 """
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 from models import db, Asignacion, Profesor, Materia, Grupo
@@ -13,15 +13,24 @@ asignaciones_bp = Blueprint('asignaciones', __name__)
 
 
 @asignaciones_bp.route('', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_asignaciones():
     """
     Obtiene todas las asignaciones
+    Query params:
+        - profesor_id: filtrar por profesor
+        - materia_id: filtrar por materia
+        - grupo_id: filtrar por grupo
+        - activo: true/false para filtrar por status
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
     profesor_id = request.args.get('profesor_id', type=int)
     materia_id = request.args.get('materia_id', type=int)
     grupo_id = request.args.get('grupo_id', type=int)
     activo = request.args.get('activo')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
     
     query = Asignacion.query
     
@@ -34,16 +43,19 @@ def get_asignaciones():
     if activo is not None:
         query = query.filter_by(activo=activo.lower() == 'true')
     
-    asignaciones = query.all()
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     
     return jsonify({
-        'asignaciones': [a.to_dict() for a in asignaciones],
-        'total': len(asignaciones)
+        'asignaciones': [a.to_dict() for a in pagination.items],
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
     }), 200
 
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_asignacion(asignacion_id):
     """
     Obtiene una asignacion por ID
@@ -53,7 +65,8 @@ def get_asignacion(asignacion_id):
 
 
 @asignaciones_bp.route('', methods=['POST'])
-# @jwt_required()
+@admin_required
+@jwt_required()
 def create_asignacion():
     """
     Crea una nueva asignacion
@@ -114,7 +127,12 @@ def create_asignacion():
     )
     
     db.session.add(asignacion)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error creating asignacion: {str(e)}')
+        return jsonify({'error': f'Error al crear asignación: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Asignación creada exitosamente',
@@ -123,7 +141,8 @@ def create_asignacion():
 
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['PUT'])
-# @jwt_required()
+@admin_required
+@jwt_required()
 def update_asignacion(asignacion_id):
     """
     Actualiza una asignacion
@@ -168,7 +187,12 @@ def update_asignacion(asignacion_id):
     if 'activo' in data:
         asignacion.activo = data['activo']
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating asignacion: {str(e)}')
+        return jsonify({'error': f'Error al actualizar asignación: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Asignación actualizada exitosamente',
@@ -177,7 +201,8 @@ def update_asignacion(asignacion_id):
 
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['DELETE'])
-# @jwt_required()
+@admin_required
+@jwt_required()
 def delete_asignacion(asignacion_id):
     """
     Elimina una asignacion
@@ -185,7 +210,12 @@ def delete_asignacion(asignacion_id):
     asignacion = Asignacion.query.get_or_404(asignacion_id)
     
     db.session.delete(asignacion)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error deleting asignacion: {str(e)}')
+        return jsonify({'error': f'Error al eliminar asignación: {str(e)}'}), 500
     
     return jsonify({'message': 'Asignación eliminada exitosamente'}), 200
 
@@ -195,7 +225,7 @@ def delete_asignacion(asignacion_id):
 # ============================================================
 
 @asignaciones_bp.route('/<int:asignacion_id>/puede-editar', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def puede_editar(asignacion_id):
     """
     Verifica si actualmente se puede editar calificaciones para esta asignacion
@@ -212,7 +242,7 @@ def puede_editar(asignacion_id):
 
 
 @asignaciones_bp.route('/profesor/<int:profesor_id>/actuales', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_asignaciones_actuales_profesor(profesor_id):
     """
     Obtiene las asignaciones actuales de un profesor

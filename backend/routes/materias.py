@@ -16,18 +16,28 @@ def list_materias():
     Lista todas las materias
     Query params:
         - carrera_id: filtrar por carrera
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
     carrera_id = request.args.get('carrera_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
     
     query = Materia.query
     
     if carrera_id:
         query = query.filter(Materia.carrera_id == carrera_id)
     
-    materias = query.order_by(Materia.nombre).all()
+    pagination = query.order_by(Materia.nombre).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     
     return jsonify({
-        'materias': [m.to_dict() for m in materias]
+        'materias': [m.to_dict() for m in pagination.items],
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
     }), 200
 
 

@@ -4,6 +4,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { getCalificacionesByAlumno } from '../../api/calificaciones';
 import { BookOpen, TrendingUp } from 'lucide-react';
+import { TableSkeleton } from '../../components/ui/Skeleton';
 
 export default function MisCalificaciones() {
   const { user } = useAuth();
@@ -97,9 +98,7 @@ export default function MisCalificaciones() {
         <h2 className="text-xl font-bold text-gray-800 mb-4">Detalle por Materia</h2>
         
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          </div>
+          <TableSkeleton rows={5} columns={10} />
         ) : calificaciones.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No tienes calificaciones registradas

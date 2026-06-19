@@ -2,7 +2,7 @@
 Rutas para gestión de Alumnos
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, Alumno, Carrera, Materia, Calificacion
@@ -157,11 +157,11 @@ def get_alumno(id):
     """
     Obtiene un alumno por ID (admin o el propio alumno)
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     alumno = Alumno.query.get_or_404(id)
     
     # Verificar permisos: solo el admin o el propio alumno pueden ver
-    if identity.get('type') == 'alumno' and identity['id'] != id:
+    if claims.get('type') == 'alumno' and claims['id'] != id:
         return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
     
     return jsonify({'alumno': alumno.to_dict()}), 200
@@ -278,12 +278,12 @@ def mis_datos():
     """
     Obtiene los datos del alumno logueado (alumno only)
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
-    if identity.get('type') != 'alumno':
+    if claims.get('type') != 'alumno':
         return jsonify({'error': 'Solo alumnos pueden acceder a esta ruta'}), 403
     
-    alumno = Alumno.query.get_or_404(identity['id'])
+    alumno = Alumno.query.get_or_404(claims['id'])
     
     # Incluir estadísticas
     num_calificaciones = alumno.calificaciones.count()

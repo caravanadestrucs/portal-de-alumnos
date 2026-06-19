@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +21,8 @@ export default function Login() {
 
     try {
       const user = await login(email, password);
-      navigate(user.type === 'admin' ? '/admin' : '/alumno');
+      const routes = { admin: '/admin', alumno: '/alumno', profesor: '/profesor' };
+      navigate(routes[user.type] || '/');
     } catch (err) {
       setError(err.response?.data?.message || 'Credenciales inválidas');
     } finally {
@@ -77,13 +79,20 @@ export default function Login() {
             <div className="relative">
               <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Contraseña"
                 required
-                className="w-full pl-10 pr-4 py-3 rounded-xl input-glass"
+                className="w-full pl-10 pr-10 py-3 rounded-xl input-glass"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
 
             <Button

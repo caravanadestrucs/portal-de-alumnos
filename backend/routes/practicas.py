@@ -2,14 +2,17 @@
 Rutas para gestión de Prácticas Profesionales
 """
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 from models import db, PracticaProfesional, Alumno
+from utils.decorators import admin_required
 
 practicas_bp = Blueprint('practicas', __name__)
 
 
 @practicas_bp.route('', methods=['GET'])
+@jwt_required()
 def get_all():
     """Obtiene todas las prácticas profesionales"""
     practicas = PracticaProfesional.query.order_by(PracticaProfesional.alumno_id, PracticaProfesional.numero_practica).all()
@@ -17,6 +20,7 @@ def get_all():
 
 
 @practicas_bp.route('/alumno/<int:alumno_id>', methods=['GET'])
+@jwt_required()
 def get_by_alumno(alumno_id):
     """Obtiene las prácticas de un alumno"""
     practicas = PracticaProfesional.query.filter_by(alumno_id=alumno_id).all()
@@ -27,6 +31,7 @@ def get_by_alumno(alumno_id):
 
 
 @practicas_bp.route('', methods=['POST'])
+@admin_required
 def create():
     """Crea una nueva práctica profesional"""
     data = request.get_json()
@@ -60,13 +65,13 @@ def create():
     if data.get('fecha_inicio'):
         try:
             fecha_inicio = datetime.strptime(data['fecha_inicio'], '%Y-%m-%d').date()
-        except:
-            pass
+        except Exception as e:
+            return jsonify({'error': f'Formato de fecha_inicio inválido. Use YYYY-MM-DD: {str(e)}'}), 400
     if data.get('fecha_fin'):
         try:
             fecha_fin = datetime.strptime(data['fecha_fin'], '%Y-%m-%d').date()
-        except:
-            pass
+        except Exception as e:
+            return jsonify({'error': f'Formato de fecha_fin inválido. Use YYYY-MM-DD: {str(e)}'}), 400
     
     practica = PracticaProfesional(
         alumno_id=alumno_id,
@@ -89,6 +94,7 @@ def create():
 
 
 @practicas_bp.route('/<int:practica_id>', methods=['PUT'])
+@admin_required
 def update(practica_id):
     """Actualiza una práctica profesional"""
     practica = PracticaProfesional.query.get_or_404(practica_id)
@@ -103,16 +109,16 @@ def update(practica_id):
         if data['fecha_inicio']:
             try:
                 practica.fecha_inicio = datetime.strptime(data['fecha_inicio'], '%Y-%m-%d').date()
-            except:
-                pass
+            except Exception as e:
+                return jsonify({'error': f'Formato de fecha_inicio inválido. Use YYYY-MM-DD: {str(e)}'}), 400
         else:
             practica.fecha_inicio = None
     if 'fecha_fin' in data:
         if data['fecha_fin']:
             try:
                 practica.fecha_fin = datetime.strptime(data['fecha_fin'], '%Y-%m-%d').date()
-            except:
-                pass
+            except Exception as e:
+                return jsonify({'error': f'Formato de fecha_fin inválido. Use YYYY-MM-DD: {str(e)}'}), 400
         else:
             practica.fecha_fin = None
     if 'estado' in data:
@@ -129,6 +135,7 @@ def update(practica_id):
 
 
 @practicas_bp.route('/<int:practica_id>', methods=['DELETE'])
+@admin_required
 def delete(practica_id):
     """Elimina una práctica profesional"""
     practica = PracticaProfesional.query.get_or_404(practica_id)

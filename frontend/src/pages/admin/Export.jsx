@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { useToast } from '../../components/ui/Toast';
 import { Download, FileText, Database, FileSpreadsheet } from 'lucide-react';
 
 export default function AdminExport() {
   const [loading, setLoading] = useState(null);
+  const toast = useToast();
 
   const handleDownload = async (type) => {
     setLoading(type);
@@ -42,7 +44,7 @@ export default function AdminExport() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('Error al descargar el archivo. Intenta de nuevo.');
+      toast.error('Error al descargar el archivo. Intenta de nuevo.');
       console.error('Download error:', error);
     } finally {
       setLoading(null);

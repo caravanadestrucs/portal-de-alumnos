@@ -1,8 +1,8 @@
 """
 Rutas para que el profesor vea y/edit calificaciones de sus grupos
 """
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, date
 
 from models import db, Asignacion, GrupoIntegrante, Calificacion
@@ -11,12 +11,21 @@ profesor_bp = Blueprint('profesor', __name__)
 
 
 @profesor_bp.route('/mis-asignaciones', methods=['GET'])
+@jwt_required()
 def get_mis_asignaciones():
     """Obtiene las asignaciones del profesor actual"""
+    claims = get_jwt()
+    user_type = claims.get('type')
+    user_id = claims.get('id')
+    
     profesor_id = request.args.get('profesor_id', type=int)
     
     if not profesor_id:
         return jsonify({'error': 'profesor_id requerido'}), 400
+    
+    # Solo el mismo profesor o un admin pueden ver
+    if user_type != 'admin' and (user_type != 'profesor' or user_id != profesor_id):
+        return jsonify({'error': 'No tienes permiso para ver estas asignaciones'}), 403
     
     asignaciones = Asignacion.query.filter_by(profesor_id=profesor_id).all()
     
@@ -27,9 +36,18 @@ def get_mis_asignaciones():
 
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['GET'])
+@jwt_required()
 def get_calificaciones_asignacion(asignacion_id):
     """Obtiene las calificaciones de los alumnos de una asignacion"""
+    claims = get_jwt()
+    user_type = claims.get('type')
+    user_id = claims.get('id')
+    
     asignacion = Asignacion.query.get_or_404(asignacion_id)
+    
+    # Solo el profesor asignado o un admin pueden ver
+    if user_type != 'admin' and (user_type != 'profesor' or user_id != asignacion.profesor_id):
+        return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
     integrantes = GrupoIntegrante.query.filter_by(
         grupo_id=asignacion.grupo_id
@@ -64,7 +82,12 @@ def get_calificaciones_asignacion(asignacion_id):
                 'puede_editar': asignacion.puede_editar_calificaciones()
             })
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error syncing calificaciones: {str(e)}')
+        return jsonify({'error': f'Error al obtener calificaciones: {str(e)}'}), 500
     
     return jsonify({
         'asignacion': asignacion.to_dict(),
@@ -74,9 +97,18 @@ def get_calificaciones_asignacion(asignacion_id):
 
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['PUT'])
+@jwt_required()
 def update_calificaciones(asignacion_id):
     """Actualiza las calificaciones de los alumnos de una asignacion"""
+    claims = get_jwt()
+    user_type = claims.get('type')
+    user_id = claims.get('id')
+    
     asignacion = Asignacion.query.get_or_404(asignacion_id)
+    
+    # Solo el profesor asignado o un admin pueden modificar
+    if user_type != 'admin' and (user_type != 'profesor' or user_id != asignacion.profesor_id):
+        return jsonify({'error': 'No tienes permiso para modificar estas calificaciones'}), 403
     
     if not asignacion.puede_editar_calificaciones():
         return jsonify({'error': 'El período de edición ha terminado'}), 403
@@ -115,7 +147,12 @@ def update_calificaciones(asignacion_id):
             else:
                 setattr(calif, campo, max(0, min(10, float(valor))))
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating calificacion: {str(e)}')
+        return jsonify({'error': f'Error al actualizar calificación: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Calificación actualizada',

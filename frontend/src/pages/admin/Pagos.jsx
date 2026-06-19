@@ -1,15 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useFetch } from '../../hooks/useFetch';
 import * as alumnosApi from '../../api/alumnos';
 import { getPagosByAlumno, getAlumnosConPagosPendientes, createPago, togglePagoStatus, deletePago } from '../../api/pagos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { Plus, CheckCircle, XCircle, DollarSign, Trash2, AlertTriangle, Search, User, ArrowLeft } from 'lucide-react';
 
 export default function AdminPagos() {
-  const { data: alumnos } = useFetch(alumnosApi.getAlumnos);
+  const fetchAllAlumnos = useCallback(
+    () => alumnosApi.getAlumnos({ per_page: 200 }),
+    []
+  );
+  const { data: alumnosResponse } = useFetch(fetchAllAlumnos);
+  const alumnos = alumnosResponse?.alumnos || [];
   const toast = useToast();
   const [pagosPendientesData, setPagosPendientesData] = useState(null);
   const [loadingPendientes, setLoadingPendientes] = useState(true);
@@ -272,14 +278,22 @@ export default function AdminPagos() {
           </div>
 
           {loadingPendientes ? (
-            <Card className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-              <p className="mt-4 text-gray-500">Cargando...</p>
+            <Card>
+              <TableSkeleton rows={5} columns={4} />
             </Card>
           ) : alumnosDeudores.length === 0 ? (
             <Card className="text-center py-12">
               <DollarSign size={48} className="mx-auto text-gray-300 mb-4" />
               <p className="text-gray-500">No hay alumnos con pagos pendientes</p>
+              <div className="mt-4">
+                <Button onClick={() => {
+                  const input = searchRef.current?.querySelector('input');
+                  if (input) input.focus();
+                }}>
+                  <Plus size={18} />
+                  Crear primera nota
+                </Button>
+              </div>
             </Card>
           ) : (
             <div className="space-y-3">
@@ -355,9 +369,8 @@ export default function AdminPagos() {
           )}
 
           {loading ? (
-            <Card className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-              <p className="mt-4 text-gray-500">Cargando pagos...</p>
+            <Card>
+              <TableSkeleton rows={5} columns={7} />
             </Card>
           ) : pagos.length === 0 ? (
             <Card className="text-center py-12">

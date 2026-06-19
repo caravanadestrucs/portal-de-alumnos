@@ -1,11 +1,9 @@
 import api from './index';
 
-const API_URL = import.meta.env.VITE_API_URL;
-
-export const getAlumnos = async () => {
-  const response = await api.get('/alumnos');
+export const getAlumnos = async (params = {}) => {
+  const response = await api.get('/alumnos', { params });
   // El backend devuelve { alumnos: [...], total, page, pages }
-  return response.data.alumnos || [];
+  return response.data;
 };
 
 export const getAlumno = async (id) => {

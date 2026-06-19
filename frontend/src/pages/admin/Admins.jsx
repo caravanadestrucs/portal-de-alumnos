@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import api from '../../api';
 import { Plus, Pencil, Trash2, Key, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -18,6 +21,8 @@ export default function AdminAdmins() {
     password: '',
   });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const toast = useToast();
   const [error, setError] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -27,17 +32,10 @@ export default function AdminAdmins() {
   });
   const { user } = useAuth();
 
-  const API_URL = import.meta.env.VITE_API_URL || '/api';
-
   const fetchAdmins = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/admins/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Error al cargar');
-      const data = await res.json();
-      setAdmins(data.admins || []);
+      const response = await api.get('/admins/');
+      setAdmins(response.data.admins || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -74,33 +72,21 @@ export default function AdminAdmins() {
     setSaving(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const method = editingAdmin ? 'PUT' : 'POST';
-      const url = editingAdmin
-        ? `${API_URL}/admins/${editingAdmin.id}`
-        : `${API_URL}/admins/`;
-
       const payload = { ...formData };
       if (editingAdmin && !payload.password) {
         delete payload.password;
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error');
+      if (editingAdmin) {
+        await api.put(`/admins/${editingAdmin.id}`, payload);
+      } else {
+        await api.post('/admins/', payload);
+      }
 
       setShowModal(false);
       fetchAdmins();
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.error || err.message || 'Error');
     } finally {
       setSaving(false);
     }
@@ -109,21 +95,14 @@ export default function AdminAdmins() {
   const handleDelete = async (admin) => {
     if (!confirm(`¿Eliminar a ${admin.nombre}? Esta acción no se puede deshacer.`)) return;
 
+    setDeletingId(admin.id);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/admins/${admin.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error');
-      }
-
+      await api.delete(`/admins/${admin.id}`);
       fetchAdmins();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.response?.data?.error || err.message || 'Error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -139,30 +118,19 @@ export default function AdminAdmins() {
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (!passwordData.newPassword || passwordData.newPassword.length < 6) {
-      alert('La contraseña debe tener al menos 6 caracteres');
+      toast.error('La contraseña debe tener al menos 6 caracteres');
       return;
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/admins/${passwordData.adminId}/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ new_password: passwordData.newPassword }),
+      await api.post(`/admins/${passwordData.adminId}/change-password`, {
+        new_password: passwordData.newPassword,
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Error');
-      }
-
       setShowPasswordModal(false);
-      alert('Contraseña actualizada exitosamente');
+      toast.success('Contraseña actualizada exitosamente');
     } catch (err) {
-      alert(err.message);
+      toast.error(err.response?.data?.error || err.message || 'Error');
     }
   };
 
@@ -206,10 +174,16 @@ export default function AdminAdmins() {
       {/* Lista */}
       <Card title={`Administradores (${filtered.length})`}>
         {loading ? (
-          <div className="text-center py-8 text-gray-500">Cargando...</div>
+          <TableSkeleton rows={8} columns={4} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No se encontraron administradores
+            <p>No se encontraron administradores</p>
+            <div className="mt-4">
+              <Button onClick={openCreate}>
+                <Plus size={18} />
+                Crear primer administrador
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -254,10 +228,15 @@ export default function AdminAdmins() {
                         {admin.id !== user?.id && (
                           <button
                             onClick={() => handleDelete(admin)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            disabled={deletingId === admin.id}
+                            className={`p-2 rounded-lg transition-colors ${deletingId === admin.id ? 'opacity-50 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
                             title="Eliminar"
                           >
-                            <Trash2 size={16} />
+                            {deletingId === admin.id ? (
+                              <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 size={16} />
+                            )}
                           </button>
                         )}
                       </div>

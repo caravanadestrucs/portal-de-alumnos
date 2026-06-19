@@ -1,20 +1,29 @@
-import { useState, useEffect } from 'react';
-import { useFetch } from '../../hooks/useFetch';
+import { useState, useEffect, useCallback } from 'react';
 import { getAlumnos, createAlumno, updateAlumno, deleteAlumno } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
+import { useFetch } from '../../hooks/useFetch';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
-import { Plus, Search, Edit, Trash2, UserPlus } from 'lucide-react';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import { Plus, Search, Edit, Trash2, UserPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminAlumnos() {
-  const { data: alumnos, loading, refetch } = useFetch(getAlumnos);
   const { data: carreras } = useFetch(getCarreras);
 
+  const [alumnos, setAlumnos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAlumno, setEditingAlumno] = useState(null);
   const [formData, setFormData] = useState({
@@ -27,18 +36,44 @@ export default function AdminAlumnos() {
     carrera_id: '',
   });
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
-  const filteredAlumnos = Array.isArray(alumnos)
-    ? alumnos.filter((alumno) => {
-        const fullName = `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno}`.toLowerCase();
-        return (
-          fullName.includes(searchTerm.toLowerCase()) ||
-          alumno.numero_control?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          alumno.email?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      })
-    : [];
+  // ── Debounce del search ──────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
+  // ── Resetear a página 1 cuando cambia la búsqueda ────────
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm]);
+
+  // ── Fetch de alumnos con paginación y búsqueda ───────────
+  const fetchAlumnos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await getAlumnos({
+        page,
+        per_page: ITEMS_PER_PAGE,
+        search: debouncedSearchTerm || undefined,
+      });
+      setAlumnos(result.alumnos || []);
+      setTotalItems(result.total || 0);
+      setTotalPages(result.pages || 0);
+      return result;
+    } catch (err) {
+      console.error('Error al cargar alumnos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearchTerm]);
+
+  useEffect(() => {
+    fetchAlumnos();
+  }, [fetchAlumnos]);
+
+  // ── Columnas de la tabla ─────────────────────────────────
   const columns = [
     {
       key: 'numero_control',
@@ -98,6 +133,7 @@ export default function AdminAlumnos() {
     },
   ];
 
+  // ── Helpers del modal ────────────────────────────────────
   const openNewModal = () => {
     setEditingAlumno(null);
     setFormData({
@@ -126,6 +162,7 @@ export default function AdminAlumnos() {
     setIsModalOpen(true);
   };
 
+  // ── CRUD handlers ────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -134,13 +171,14 @@ export default function AdminAlumnos() {
       if (editingAlumno) {
         const { password, ...updateData } = formData;
         await updateAlumno(editingAlumno.id, updateData);
+        await fetchAlumnos(); // recargar página actual
       } else {
         await createAlumno(formData);
+        setPage(1); // ir a primera página para ver el nuevo
       }
       setIsModalOpen(false);
-      refetch();
     } catch (error) {
-      alert(error.response?.data?.message || 'Error al guardar');
+      toast.error(error.response?.data?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -150,13 +188,42 @@ export default function AdminAlumnos() {
     if (confirm('¿Estás seguro de eliminar este alumno?')) {
       try {
         await deleteAlumno(id);
-        refetch();
+        const result = await fetchAlumnos();
+        // Si la página actual quedó vacía, retroceder una página
+        if (result && result.alumnos && result.alumnos.length === 0 && page > 1) {
+          setPage((p) => p - 1);
+        }
       } catch (error) {
-        alert(error.response?.data?.message || 'Error al eliminar');
+        toast.error(error.response?.data?.message || 'Error al eliminar');
       }
     }
   };
 
+  // ── Paginación ───────────────────────────────────────────
+  const firstItem = (page - 1) * ITEMS_PER_PAGE + 1;
+  const lastItem = Math.min(page * ITEMS_PER_PAGE, totalItems);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 1) return [];
+
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (page > 3) pages.push('...');
+      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
+        pages.push(i);
+      }
+      if (page < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  // ── Render ───────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -186,12 +253,77 @@ export default function AdminAlumnos() {
       </div>
 
       {/* Table */}
-      <Table
-        columns={columns}
-        data={filteredAlumnos}
-        loading={loading}
-        emptyMessage="No hay alumnos registrados"
-      />
+      {loading ? (
+        <TableSkeleton rows={8} columns={5} />
+      ) : alumnos.length === 0 ? (
+        <Card className="text-center py-12">
+          <UserPlus size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">No hay alumnos registrados</p>
+          <Button onClick={openNewModal}>
+            <Plus size={18} />
+            Crear primer alumno
+          </Button>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          data={alumnos}
+          emptyMessage="No hay alumnos registrados"
+        />
+      )}
+
+      {/* Pagination */}
+      {totalPages > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+          <p className="text-sm text-gray-500">
+            Mostrando {firstItem}&ndash;{lastItem} de {totalItems} alumnos
+          </p>
+
+          {pageNumbers.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft size={16} />
+                Anterior
+              </Button>
+
+              {pageNumbers.map((pageNum, idx) =>
+                pageNum === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 text-gray-400 select-none">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                      pageNum === page
+                        ? 'bg-primary-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente
+                <ChevronRight size={16} />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal */}
       <Modal

@@ -520,22 +520,4 @@ class Asignacion(db.Model):
         }
 
 
-def init_db(app):
-    """Inicializa la base de datos con la aplicación"""
-    db.init_app(app)
-    
-    with app.app_context():
-        # Crear tablas
-        db.create_all()
-        
-        # Crear admin por defecto si no existe
-        if not Admin.query.first():
-            admin = Admin(
-                username='admin',
-                email='admin@universidadfv.edu.mx',
-                nombre='Administrador Principal'
-            )
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            print('✅ Admin por defecto creado: admin@universidadfv.edu.mx / admin123')
+

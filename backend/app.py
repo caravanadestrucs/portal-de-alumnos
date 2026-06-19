@@ -3,6 +3,7 @@ Portal de Calificaciones - Universidad Felipe Villanueva
 Backend Flask API
 """
 import os
+import logging
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -10,7 +11,8 @@ from flask_migrate import Migrate
 from datetime import timedelta
 
 from config import get_config
-from models import db, init_db
+from models import db
+from extensions import limiter
 
 
 def create_app(config_name=None):
@@ -23,6 +25,10 @@ def create_app(config_name=None):
         os.makedirs(instance_path)
     
     app = Flask(__name__)
+    
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
     
     # Cargar configuración
     if config_name:
@@ -55,6 +61,7 @@ def create_app(config_name=None):
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     )
     JWTManager(app)
+    limiter.init_app(app)
     Migrate(app, db)
     
     # Inicializar base de datos

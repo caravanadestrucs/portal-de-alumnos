@@ -4,18 +4,20 @@ Rutas de autenticación: login, logout, register, me
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity, get_jwt
+    jwt_required, get_jwt
 )
 from datetime import datetime, timedelta
 
 from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion
 from utils.security import generate_tokens, validate_email, validate_numero_control
 from utils.decorators import admin_required, alumno_required
+from extensions import limiter
 
 auth_bp = Blueprint('auth', __name__)
 
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@limiter.limit("10/minute")
 def login():
     """
     Inicio de sesión para admin o alumno
@@ -198,9 +200,9 @@ def get_current_user():
     """
     Obtiene la información del usuario actual
     """
-    identity = get_jwt_identity()
-    user_type = identity.get('type')
-    user_id = identity.get('id')
+    claims = get_jwt()
+    user_type = claims.get('type')
+    user_id = claims.get('id')
     
     if user_type == 'admin':
         admin = Admin.query.get(user_id)
@@ -229,8 +231,8 @@ def refresh_token():
     """
     Refresca el token de acceso usando el refresh token
     """
-    identity = get_jwt_identity()
-    tokens = generate_tokens(identity['id'], identity['type'])
+    claims = get_jwt()
+    tokens = generate_tokens(claims['id'], claims['type'])
     
     return jsonify({
         'message': 'Token refrescado',
@@ -245,7 +247,7 @@ def change_password():
     Cambiar contraseña del usuario actual
     Body: { current_password, new_password }
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     data = request.get_json()
     
     if not data:
@@ -260,18 +262,23 @@ def change_password():
     if len(new_password) < 6:
         return jsonify({'error': 'La nueva contraseña debe tener al menos 6 caracteres'}), 400
     
-    user_type = identity.get('type')
-    user_id = identity.get('id')
+    user_type = claims.get('type')
+    user_id = claims.get('id')
     
     try:
         if user_type == 'admin':
             user = Admin.query.get(user_id)
-            if not user.check_password(current_password):
+            if not user or not user.check_password(current_password):
+                return jsonify({'error': 'Contraseña actual incorrecta'}), 401
+            user.set_password(new_password)
+        elif user_type == 'profesor':
+            user = Profesor.query.get(user_id)
+            if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         else:
             user = Alumno.query.get(user_id)
-            if not user.check_password(current_password):
+            if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         

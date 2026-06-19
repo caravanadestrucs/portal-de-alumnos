@@ -5,6 +5,8 @@ import { getAlumnos } from '../../api/alumnos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, Users, UserPlus, UserMinus, Search } from 'lucide-react';
 
 export default function AdminGrupos() {
@@ -22,6 +24,8 @@ export default function AdminGrupos() {
     activo: true,
   });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCarrera, setFiltroCarrera] = useState('');
   
@@ -98,8 +102,8 @@ export default function AdminGrupos() {
     setSelectedGrupo(grupo);
     await loadIntegrantes(grupo.id);
     try {
-      const data = await getAlumnos();
-      setAlumnos(data || []);
+      const data = await getAlumnos({ per_page: 200 });
+      setAlumnos(data?.alumnos || []);
     } catch (error) {
       console.error('Error loading alumnos:', error);
     }
@@ -128,7 +132,7 @@ export default function AdminGrupos() {
       closeModal();
       loadGrupos();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -136,11 +140,14 @@ export default function AdminGrupos() {
 
   const handleDelete = async (id) => {
     if (confirm('¿Estás seguro de eliminar este grupo?')) {
+      setDeletingId(id);
       try {
         await deleteGrupo(id);
         loadGrupos();
       } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
+        toast.error(error.response?.data?.error || 'Error al eliminar');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -182,7 +189,7 @@ export default function AdminGrupos() {
       setResultadosBusqueda([]);
       setShowDropdown(false);
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al agregar integrante');
+      toast.error(error.response?.data?.error || 'Error al agregar integrante');
     } finally {
       setIntegranteSaving(false);
     }
@@ -194,7 +201,7 @@ export default function AdminGrupos() {
       await removeIntegrante(selectedGrupo.id, alumnoId);
       await loadIntegrantes(selectedGrupo.id);
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al remover');
+      toast.error(error.response?.data?.error || 'Error al remover');
     }
   };
 
@@ -262,9 +269,8 @@ export default function AdminGrupos() {
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando grupos...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={5} />
         </Card>
       ) : filteredGrupos.length === 0 ? (
         <Card className="text-center py-12">
@@ -273,6 +279,12 @@ export default function AdminGrupos() {
           <p className="text-sm text-gray-400 mt-1">
             Crea el primer grupo para comenzar
           </p>
+          <div className="mt-4">
+            <Button onClick={openNewModal}>
+              <Plus size={18} />
+              Crear primer grupo
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -340,9 +352,14 @@ export default function AdminGrupos() {
                         </button>
                         <button
                           onClick={() => handleDelete(grupo.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          disabled={deletingId === grupo.id}
+                          className={`p-2 rounded-lg transition-colors ${deletingId === grupo.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          <Trash2 size={18} className="text-red-500" />
+                          {deletingId === grupo.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={18} className="text-red-500" />
+                          )}
                         </button>
                       </div>
                     </td>

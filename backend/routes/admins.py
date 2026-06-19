@@ -2,7 +2,7 @@
 Rutas para gestión de administradores
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Admin
 from utils.decorators import admin_required
@@ -16,10 +16,21 @@ admins_bp = Blueprint('admins', __name__)
 def list_admins():
     """
     Lista todos los administradores
+    Query params:
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
-    admins = Admin.query.all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    pagination = Admin.query.paginate(page=page, per_page=per_page, error_out=False)
+    
     return jsonify({
-        'admins': [a.to_dict() for a in admins]
+        'admins': [a.to_dict() for a in pagination.items],
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
     }), 200
 
 
@@ -146,8 +157,8 @@ def delete_admin(admin_id):
     """
     Elimina un administrador (no permite auto-eliminación)
     """
-    identity = get_jwt_identity()
-    current_admin_id = identity.get('id')
+    claims = get_jwt()
+    current_admin_id = claims.get('id')
     
     # No permitir auto-eliminación
     if admin_id == current_admin_id:
@@ -183,8 +194,8 @@ def change_admin_password(admin_id):
     Body: { new_password }
     Solo el propio admin o un admin pueden cambiarla
     """
-    identity = get_jwt_identity()
-    current_admin_id = identity.get('id')
+    claims = get_jwt()
+    current_admin_id = claims.get('id')
     
     # Solo el propio admin o cualquier admin puede cambiar la contraseña
     if admin_id != current_admin_id:

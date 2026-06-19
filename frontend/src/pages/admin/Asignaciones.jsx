@@ -6,6 +6,8 @@ import { getGrupos } from '../../api/grupos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, Calendar, Users } from 'lucide-react';
 
 export default function AdminAsignaciones() {
@@ -33,6 +35,8 @@ export default function AdminAsignaciones() {
   const [grupoCarreraId, setGrupoCarreraId] = useState(null);
   
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const toast = useToast();
   const [filtroProfesor, setFiltroProfesor] = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
 
@@ -141,7 +145,7 @@ export default function AdminAsignaciones() {
       closeModal();
       loadData();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -149,11 +153,14 @@ export default function AdminAsignaciones() {
 
   const handleDelete = async (id) => {
     if (confirm('¿Eliminar esta asignación?')) {
+      setDeletingId(id);
       try {
         await deleteAsignacion(id);
         loadData();
       } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
+        toast.error(error.response?.data?.error || 'Error al eliminar');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -223,9 +230,8 @@ export default function AdminAsignaciones() {
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando asignaciones...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={7} />
         </Card>
       ) : filteredAsignaciones.length === 0 ? (
         <Card className="text-center py-12">
@@ -234,6 +240,12 @@ export default function AdminAsignaciones() {
           <p className="text-sm text-gray-400 mt-1">
             Crea la primera asignación para comenzar
           </p>
+          <div className="mt-4">
+            <Button onClick={openNewModal}>
+              <Plus size={18} />
+              Crear primera asignación
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -305,9 +317,14 @@ export default function AdminAsignaciones() {
                         </button>
                         <button
                           onClick={() => handleDelete(a.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg"
+                          disabled={deletingId === a.id}
+                          className={`p-2 rounded-lg ${deletingId === a.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          <Trash2 size={18} className="text-red-500" />
+                          {deletingId === a.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={18} className="text-red-500" />
+                          )}
                         </button>
                       </div>
                     </td>

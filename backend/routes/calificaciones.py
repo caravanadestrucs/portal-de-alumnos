@@ -2,7 +2,7 @@
 Rutas para gestión de Calificaciones
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Calificacion, Alumno, Materia
 from utils.decorators import admin_required
@@ -11,17 +11,16 @@ calificaciones_bp = Blueprint('calificaciones', __name__)
 
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_alumno_calificaciones(alumno_id):
     """
     Obtiene todas las calificaciones de un alumno
     """
-    # Por ahora permitir sin JWT para debug
-    # identity = get_jwt_identity()
+    claims = get_jwt()
     
-    # # Verificar permisos: solo el admin o el propio alumno
-    # if identity.get('type') == 'alumno' and identity['id'] != alumno_id:
-    #     return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
+    # Verificar permisos: solo el admin o el propio alumno
+    if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
+        return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
     
@@ -152,10 +151,10 @@ def get_historial(alumno_id):
     Obtiene el historial completo del alumno (para el portal)
     Incluye calificaciones, promedio general, etc.
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
     # Verificar permisos
-    if identity.get('type') == 'alumno' and identity['id'] != alumno_id:
+    if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver este historial'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
@@ -205,8 +204,8 @@ def get_calificacion(id):
     """
     calificacion = Calificacion.query.get_or_404(id)
     
-    identity = get_jwt_identity()
-    if identity.get('type') == 'alumno' and identity['id'] != calificacion.alumno_id:
+    claims = get_jwt()
+    if claims.get('type') == 'alumno' and claims['id'] != calificacion.alumno_id:
         return jsonify({'error': 'No tienes permiso para ver esta calificación'}), 403
     
     return jsonify({'calificacion': calificacion.to_dict()}), 200
@@ -232,6 +231,7 @@ def delete_calificacion(id):
 
 
 @calificaciones_bp.route('/periodos', methods=['GET'])
+@jwt_required()
 def get_periodos():
     """
     Obtiene todos los periodos/años únicos en las calificaciones
@@ -239,9 +239,9 @@ def get_periodos():
     from sqlalchemy import func, distinct
     
     resultados = db.session.query(
-        distinct(Calificacion.periodo),
-        distinct(Calificacion.anio)
-    ).order_by(Calificacion.anio.desc()).all()
+        Calificacion.periodo,
+        Calificacion.anio
+    ).distinct().order_by(Calificacion.anio.desc()).all()
     
     periodos = []
     seen = set()

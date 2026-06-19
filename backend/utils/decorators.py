@@ -3,7 +3,7 @@ Decoradores personalizados para autenticación y autorización
 """
 from functools import wraps
 from flask import jsonify
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity, get_jwt
+from flask_jwt_extended import verify_jwt_in_request, get_jwt
 
 
 def get_current_user():
@@ -14,17 +14,17 @@ def get_current_user():
     from models import Admin, Alumno
     
     verify_jwt_in_request()
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
-    if identity.get('type') == 'admin':
+    if claims.get('type') == 'admin':
         return {
             'type': 'admin',
-            'data': Admin.query.get(identity['id'])
+            'data': Admin.query.get(claims['id'])
         }
-    elif identity.get('type') == 'alumno':
+    elif claims.get('type') == 'alumno':
         return {
             'type': 'alumno',
-            'data': Alumno.query.get(identity['id'])
+            'data': Alumno.query.get(claims['id'])
         }
     
     return None
@@ -37,9 +37,22 @@ def admin_required(fn):
     """
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        # Por ahora, permitir todo para debug
-        # FIXME: restaurar validación JWT
-        return fn(*args, **kwargs)
+        try:
+            verify_jwt_in_request()
+            claims = get_jwt()
+            
+            if claims.get('type') != 'admin':
+                return jsonify({
+                    'error': 'Acceso denegado. Se requiere rol de administrador.',
+                    'code': 'ADMIN_REQUIRED'
+                }), 403
+            
+            return fn(*args, **kwargs)
+        except Exception as e:
+            return jsonify({
+                'error': 'Token inválido o expirado.',
+                'code': 'INVALID_TOKEN'
+            }), 401
     
     return wrapper
 
@@ -53,9 +66,9 @@ def alumno_required(fn):
     def wrapper(*args, **kwargs):
         try:
             verify_jwt_in_request()
-            identity = get_jwt_identity()
+            claims = get_jwt()
             
-            if identity.get('type') != 'alumno':
+            if claims.get('type') != 'alumno':
                 return jsonify({
                     'error': 'Acceso denegado. Se requiere ser alumno.',
                     'code': 'ALUMNO_REQUIRED'
@@ -80,9 +93,9 @@ def login_required(fn):
     def wrapper(*args, **kwargs):
         try:
             verify_jwt_in_request()
-            identity = get_jwt_identity()
+            claims = get_jwt()
             
-            if identity.get('type') not in ['admin', 'alumno']:
+            if claims.get('type') not in ['admin', 'alumno']:
                 return jsonify({
                     'error': 'Token inválido.',
                     'code': 'INVALID_TOKEN'
@@ -105,15 +118,15 @@ def get_admin_or_403():
     from models import Admin
     
     verify_jwt_in_request()
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
-    if identity.get('type') != 'admin':
+    if claims.get('type') != 'admin':
         return None, jsonify({
             'error': 'Acceso denegado. Se requiere rol de administrador.',
             'code': 'ADMIN_REQUIRED'
         }), 403
     
-    admin = Admin.query.get(identity['id'])
+    admin = Admin.query.get(claims['id'])
     if not admin:
         return None, jsonify({
             'error': 'Administrador no encontrado.',
@@ -130,15 +143,15 @@ def get_alumno_or_403():
     from models import Alumno
     
     verify_jwt_in_request()
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
-    if identity.get('type') != 'alumno':
+    if claims.get('type') != 'alumno':
         return None, jsonify({
             'error': 'Acceso denegado. Se requiere ser alumno.',
             'code': 'ALUMNO_REQUIRED'
         }), 403
     
-    alumno = Alumno.query.get(identity['id'])
+    alumno = Alumno.query.get(claims['id'])
     if not alumno:
         return None, jsonify({
             'error': 'Alumno no encontrado.',

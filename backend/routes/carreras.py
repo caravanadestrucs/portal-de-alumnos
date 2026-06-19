@@ -168,6 +168,7 @@ def get_carrera_materias(id):
 
 
 @carreras_bp.route('/<int:id>/alumnos', methods=['GET'])
+@admin_required
 def get_carrera_alumnos(id):
     """
     Obtiene los alumnos de una carrera

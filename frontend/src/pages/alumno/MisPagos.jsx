@@ -4,6 +4,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import * as pagosApi from '../../api/pagos';
 import { CreditCard, CheckCircle, XCircle, DollarSign, Calendar } from 'lucide-react';
+import { TableSkeleton } from '../../components/ui/Skeleton';
 
 export default function MisPagos() {
   const { user } = useAuth();
@@ -16,7 +17,7 @@ export default function MisPagos() {
       try {
         if (user?.id) {
           const data = await pagosApi.getPagosByAlumno(user.id);
-          console.log('Pagos data:', data);
+          if (import.meta.env.DEV) console.log('Pagos data:', data);
           setPagos(Array.isArray(data) ? data : []);
         }
       } catch (error) {
@@ -84,9 +85,8 @@ export default function MisPagos() {
 
       {/* Pagos List */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando pagos...</p>
+        <Card>
+          <TableSkeleton rows={5} columns={4} />
         </Card>
       ) : pagos.length === 0 ? (
         <Card className="text-center py-12">

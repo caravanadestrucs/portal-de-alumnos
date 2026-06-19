@@ -3,6 +3,8 @@ import { getProfesores, createProfesor, updateProfesor, deleteProfesor } from '.
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, UserCheck, Users } from 'lucide-react';
 
 export default function AdminProfesores() {
@@ -22,6 +24,8 @@ export default function AdminProfesores() {
     activo: true,
   });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -95,19 +99,22 @@ export default function AdminProfesores() {
       closeModal();
       loadProfesores();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este professor?')) {
+    if (confirm('¿Estás seguro de eliminar este profesor?')) {
+      setDeletingId(id);
       try {
         await deleteProfesor(id);
         loadProfesores();
       } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
+        toast.error(error.response?.data?.error || 'Error al eliminar');
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -158,9 +165,8 @@ export default function AdminProfesores() {
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando profesores...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={6} />
         </Card>
       ) : filteredProfesores.length === 0 ? (
         <Card className="text-center py-12">
@@ -171,6 +177,12 @@ export default function AdminProfesores() {
           <p className="text-sm text-gray-400 mt-1">
             Crea el primer profesor para comenzar
           </p>
+          <div className="mt-4">
+            <Button onClick={openNewModal}>
+              <Plus size={18} />
+              Crear primer profesor
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -240,9 +252,14 @@ export default function AdminProfesores() {
                         </button>
                         <button
                           onClick={() => handleDelete(profesor.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          disabled={deletingId === profesor.id}
+                          className={`p-2 rounded-lg transition-colors ${deletingId === profesor.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          <Trash2 size={18} className="text-red-500" />
+                          {deletingId === profesor.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={18} className="text-red-500" />
+                          )}
                         </button>
                       </div>
                     </td>

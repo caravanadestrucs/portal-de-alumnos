@@ -8,8 +8,6 @@ from datetime import timedelta
 
 class Config:
     """Configuración base"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-key-change-in-production'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
@@ -25,6 +23,9 @@ class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""
     DEBUG = True
     ENV = 'development'
+    
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key')
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
     
     # Usar DATABASE_URL si está definida (Docker), sino usar path local
     db_url = os.environ.get('DATABASE_URL')
@@ -42,6 +43,15 @@ class ProductionConfig(Config):
     """Configuración de producción - MySQL"""
     DEBUG = False
     ENV = 'production'
+    
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    
+    def __init__(self):
+        if not self.JWT_SECRET_KEY:
+            raise ValueError("JWT_SECRET_KEY environment variable is required in production")
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY environment variable is required in production")
     
     # MySQL connection string
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
@@ -61,6 +71,8 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    SECRET_KEY = 'test-secret-key'
+    JWT_SECRET_KEY = 'test-jwt-secret-key'
 
 
 # Mapeo de configuraciones por entorno
