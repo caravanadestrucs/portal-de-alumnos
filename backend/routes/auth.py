@@ -1,6 +1,8 @@
 """
-Rutas de autenticación: login, logout, register, me
+Rutas de autenticación: login, logout, register, me, forgot-password, reset-password
 """
+import os
+import time
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
@@ -8,12 +10,48 @@ from flask_jwt_extended import (
 )
 from datetime import datetime, timedelta
 
-from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion
-from utils.security import generate_tokens, validate_email, validate_numero_control
+from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config
+from utils.security import generate_tokens, validate_email, validate_numero_control, generate_reset_token, verify_reset_token
 from utils.decorators import admin_required, alumno_required
+from utils.email import send_email, render_reset_email
 from extensions import limiter
 
 auth_bp = Blueprint('auth', __name__)
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _find_user_by_email(email: str) -> tuple:
+    """
+    Busca un usuario por email secuencialmente en las 3 tablas.
+    
+    El orden de búsqueda es: Admin → Profesor → Alumno.
+    
+    Args:
+        email: Dirección de email a buscar
+    
+    Returns:
+        tuple (user, role_string):
+            - (Admin, 'admin') si se encuentra en admins
+            - (Profesor, 'profesor') si se encuentra en profesores
+            - (Alumno, 'alumno') si se encuentra en alumnos
+            - (None, None) si no se encuentra en ninguna tabla
+    """
+    admin = Admin.query.filter_by(email=email).first()
+    if admin:
+        return admin, 'admin'
+    
+    profesor = Profesor.query.filter_by(email=email).first()
+    if profesor:
+        return profesor, 'profesor'
+    
+    alumno = Alumno.query.filter_by(email=email).first()
+    if alumno:
+        return alumno, 'alumno'
+    
+    return None, None
 
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
@@ -288,3 +326,132 @@ def change_password():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Error al cambiar contraseña: {str(e)}'}), 500
+
+
+# ============================================================
+# PASSWORD RECOVERY
+# ============================================================
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+@limiter.limit("5/hour")
+def forgot_password():
+    """
+    POST /api/auth/forgot-password
+    Solicitar recuperación de contraseña.
+    
+    Body: { "email": "user@example.com" }
+    
+    SIEMPRE retorna 200 independientemente de si el email existe o no,
+    para no revelar qué emails están registrados (seguridad por obscuridad).
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+    
+    email = data.get('email', '').strip().lower()
+    
+    if not email:
+        return jsonify({'error': 'El email es requerido'}), 400
+    
+    if not validate_email(email):
+        return jsonify({'error': 'Formato de email inválido'}), 400
+    
+    # Buscar usuario en las 3 tablas
+    user, role = _find_user_by_email(email)
+    
+    if user and role:
+        try:
+            # Generar token JWT de 15 minutos
+            token = generate_reset_token(email, role)
+            
+            # Construir URL de reset
+            frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+            reset_url = f"{frontend_url}/reset-password?token={token}"
+            
+            # Leer configuración de personalización para el template
+            app_configs = {c.key: c.value for c in Config.query.all()}
+            app_name = app_configs.get('app_name', 'Portal de Calificaciones')
+            logo_url = app_configs.get('app_logo_url', '')
+            
+            # Renderizar template y enviar email
+            html_body = render_reset_email(reset_url, app_name=app_name, logo_url=logo_url)
+            result = send_email(email, "Recuperación de Contraseña", html_body)
+            
+            if result.get('success'):
+                print(f'[EMAIL] Link de recuperación enviado a {email}')
+            else:
+                print(f'[EMAIL] Error al enviar a {email}: {result.get("error")}')
+                
+        except Exception as e:
+            # Error al generar token o enviar email — loggear pero responder 200
+            print(f'[EMAIL] Error en forgot-password para {email}: {str(e)}')
+    else:
+        # Email no registrado: loggear pero responder igual
+        print(f'[EMAIL] Solicitud de recuperación para email no registrado: {email}')
+        # Pequeño sleep para mitigar timing attacks
+        time.sleep(0.1)
+    
+    # SIEMPRE retornar 200 con el mismo mensaje
+    return jsonify({
+        'message': 'Si el email está registrado, recibirás un enlace de recuperación en tu bandeja de entrada'
+    }), 200
+
+
+@auth_bp.route('/reset-password', methods=['POST'])
+@limiter.limit("10/hour")
+def reset_password():
+    """
+    POST /api/auth/reset-password
+    Restablecer contraseña usando token JWT.
+    
+    Body: { "token": "<jwt>", "password": "nueva-contraseña" }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+    
+    token = data.get('token')
+    password = data.get('password')
+    
+    if not token:
+        return jsonify({'error': 'Token requerido'}), 400
+    
+    if not password:
+        return jsonify({'error': 'La contraseña es requerida'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+    
+    # Verificar token JWT
+    token_data = verify_reset_token(token)
+    if not token_data:
+        return jsonify({'error': 'Token inválido o expirado'}), 400
+    
+    email = token_data.get('email')
+    role = token_data.get('role')
+    
+    # Buscar usuario según el rol del token
+    try:
+        if role == 'admin':
+            user = Admin.query.filter_by(email=email).first()
+        elif role == 'profesor':
+            user = Profesor.query.filter_by(email=email).first()
+        elif role == 'alumno':
+            user = Alumno.query.filter_by(email=email).first()
+        else:
+            return jsonify({'error': 'Rol de usuario inválido'}), 400
+        
+        if not user:
+            return jsonify({'error': 'Usuario no encontrado'}), 400
+        
+        # Actualizar contraseña
+        user.set_password(password)
+        db.session.commit()
+        
+        return jsonify({'message': 'Contraseña actualizada exitosamente'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error al restablecer contraseña: {str(e)}'}), 500

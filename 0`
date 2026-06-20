@@ -1,0 +1,1 @@
+- **TASK-IMP-1.4** — Implementar `_parse_pagos()`: header mapping, validar columnas requeridas, resolver `alumno_id`, validar `monto , fechas opcionales con default hoy, `created_by_id` desde JWT.   

@@ -8,6 +8,8 @@ import Layout from './components/layout/Layout';
 // Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -17,11 +19,13 @@ import AdminMaterias from './pages/admin/Materias';
 import AdminCalificaciones from './pages/admin/Calificaciones';
 import AdminPagos from './pages/admin/Pagos';
 import AdminExport from './pages/admin/Export';
+import AdminSettings from './pages/admin/Settings';
 import AdminProfesores from './pages/admin/Profesores';
 import AdminGrupos from './pages/admin/Grupos';
 import AdminAsignaciones from './pages/admin/Asignaciones';
 import AdminAdmins from './pages/admin/Admins';
 import AdminRequisitos from './pages/admin/Requisitos';
+import AdminImportar from './pages/admin/Importar';
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
@@ -98,6 +102,22 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicRoute>
+                  <ForgotPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
+                </PublicRoute>
+              }
+            />
 
             {/* Admin Routes */}
             <Route
@@ -117,6 +137,7 @@ function App() {
               <Route path="profesores" element={<AdminProfesores />} />
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
+              <Route path="importar" element={<AdminImportar />} />
               <Route path="admins" element={<AdminAdmins />} />
               {/* <Route path="requisitos" element={<AdminRequisitos />} /> */}
               <Route path="exportar" element={<AdminExport />} />

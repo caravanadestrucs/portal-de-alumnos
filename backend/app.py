@@ -38,6 +38,7 @@ def create_app(config_name=None):
         app.config.from_object(config)
     
     # Configuración adicional
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB para importación
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
@@ -81,6 +82,8 @@ def create_app(config_name=None):
     from routes.asignaciones import asignaciones_bp
     from routes.profesor import profesor_bp
     from routes.practicas import practicas_bp
+    from routes.settings import settings_bp
+    from routes.imports import imports_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(alumnos_bp, url_prefix='/api/alumnos')
@@ -95,6 +98,8 @@ def create_app(config_name=None):
     app.register_blueprint(asignaciones_bp, url_prefix='/api/asignaciones')
     app.register_blueprint(profesor_bp, url_prefix='/api/profesor')
     app.register_blueprint(practicas_bp, url_prefix='/api/practicas')
+    app.register_blueprint(settings_bp, url_prefix='/api/config')
+    app.register_blueprint(imports_bp, url_prefix='/api/imports')
     
     # Health check endpoint
     @app.route('/api/health')
@@ -155,6 +160,13 @@ def create_app(config_name=None):
             'code': 'CONFLICT'
         }), 409
     
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        return jsonify({
+            'error': 'El archivo excede el límite de 10MB',
+            'code': 'FILE_TOO_LARGE'
+        }), 413
+    
     @app.errorhandler(422)
     def validation_error(error):
         return jsonify({
@@ -195,6 +207,23 @@ with app.app_context():
         print('[OK] Admin por defecto creado')
         print('   Email: admin@universidadfv.edu.mx')
         print('   Contrasena: admin123')
+    
+    # Seed de configuración por defecto
+    from models import Config
+    defaults = {
+        'smtp_host': '',
+        'smtp_port': '587',
+        'smtp_email': '',
+        'smtp_password': '',
+        'smtp_use_tls': 'true',
+        'app_name': 'Portal de Calificaciones',
+        'app_logo_url': '',
+    }
+    for key, value in defaults.items():
+        if not Config.query.filter_by(key=key).first():
+            db.session.add(Config(key=key, value=value))
+    db.session.commit()
+    print('[OK] Configuración por defecto creada')
 
 
 if __name__ == '__main__':

@@ -9,6 +9,30 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
+# ============================================================
+# MODELO DE CONFIGURACION (Key-Value)
+# ============================================================
+class Config(db.Model):
+    """Modelo key-value para configuración del sistema (SMTP, personalización, etc.)"""
+    __tablename__ = 'config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+# ============================================================
+# MODELO DE ADMIN
+# ============================================================
 class Admin(db.Model):
     """Modelo de Administrador"""
     __tablename__ = 'admins'
