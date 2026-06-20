@@ -1,0 +1,6 @@
+numero_control,nombre,apellido_paterno,apellido_materno,email,carrera
+NUEVO001,Carlos,Lopez,Mendoza,carlos.lopez@test.com,ISC
+NUEVO002,Ana,Martinez,Ruiz,ana.martinez@test.com,ISC
+NUEVO003,Pedro,Ramirez,,pedro.ramirez@test.com,LENF
+NUEVO004,Laura,Garcia,Hernandez,laura.garcia@test.com,LIC-ADM
+NUEVO005,Jose,Torres,,jose.torres@test.com,LD

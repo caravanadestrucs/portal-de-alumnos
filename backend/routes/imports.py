@@ -1,6 +1,6 @@
 """
 Rutas para Importación Masiva de Datos (CSV / XLSX)
-Soporta: Alumnos, Calificaciones, Pagos
+Soporta: Alumnos, Calificaciones, Pagos, Carreras, Materias
 """
 import csv
 import io
@@ -140,6 +140,22 @@ HEADER_ALIASES = {
         'fecha_pago', 'fecha pago', 'fecha_de_pago',
         'fecha de pago', 'fecha_pagada', 'fecha pagada',
         'fecha_de_pagado',
+    ],
+    'codigo': [
+        'codigo', 'código', 'code', 'clave', 'key',
+        'codigo_carrera', 'código carrera', 'codigo_materia',
+    ],
+    'descripcion': [
+        'descripcion', 'descripción', 'description', 'desc',
+        'observaciones', 'notas', 'comentarios',
+    ],
+    'creditos': [
+        'creditos', 'créditos', 'credits', 'horas',
+        'num_creditos', 'no_creditos', 'numero_creditos',
+    ],
+    'activa': [
+        'activa', 'activo', 'active', 'activa_', 'estado',
+        'habilitada', 'habilitado', 'enabled',
     ],
 }
 
@@ -869,6 +885,205 @@ def _parse_pagos(headers, rows):
 
 
 # ============================================================
+# PARSER: CARRERAS
+# ============================================================
+
+def _parse_carreras(headers, rows):
+    """
+    Parsea filas de carreras.
+    Columnas: codigo (req), nombre (req), descripcion (opc), activa (opc)
+    Returns: {'rows': [...], 'errors': [...]}
+    """
+    field_map = _build_field_map(headers)
+    result_rows = []
+    errors = []
+
+    required = ['codigo', 'nombre']
+    for req in required:
+        if req not in field_map:
+            errors.append({
+                'row': 0,
+                'field': req,
+                'value': None,
+                'message': f'Columna requerida "{req}" no encontrada en el archivo'
+            })
+            return {'rows': [], 'errors': errors}
+
+    for row_idx, row_values in enumerate(rows):
+        row_num = row_idx + 1
+
+        codigo = _get_value(row_values, field_map, 'codigo')
+        nombre = _get_value(row_values, field_map, 'nombre')
+        descripcion = _get_value(row_values, field_map, 'descripcion')
+        activa_str = _get_value(row_values, field_map, 'activa')
+
+        row_errors = []
+
+        if not codigo:
+            row_errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo, 'message': 'El código es requerido'
+            })
+        elif len(codigo) > 20:
+            row_errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo, 'message': 'El código no debe exceder 20 caracteres'
+            })
+
+        if not nombre:
+            row_errors.append({
+                'row': row_num, 'field': 'nombre',
+                'value': nombre, 'message': 'El nombre es requerido'
+            })
+
+        if row_errors:
+            errors.extend(row_errors)
+            result_rows.append({
+                'codigo': codigo, 'nombre': nombre,
+                'valid': False,
+            })
+            continue
+
+        # Validar unicidad de codigo
+        if Carrera.query.filter_by(codigo=codigo).first():
+            errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo,
+                'message': f'El código "{codigo}" ya existe en el sistema'
+            })
+            result_rows.append({
+                'codigo': codigo, 'nombre': nombre,
+                'valid': False,
+            })
+            continue
+
+        activa = _parse_bool(activa_str) if activa_str else True
+
+        row_data = {
+            'codigo': codigo.upper().strip(),
+            'nombre': nombre.strip(),
+            'descripcion': descripcion.strip() if descripcion else None,
+            'activa': activa,
+            'valid': True,
+        }
+        result_rows.append(row_data)
+
+    return {'rows': result_rows, 'errors': errors}
+
+
+# ============================================================
+# PARSER: MATERIAS
+# ============================================================
+
+def _parse_materias(headers, rows):
+    """
+    Parsea filas de materias.
+    Columnas: codigo (req), nombre (req), carrera (req),
+              creditos (opc, default 0)
+    Returns: {'rows': [...], 'errors': [...]}
+    """
+    field_map = _build_field_map(headers)
+    result_rows = []
+    errors = []
+
+    required = ['codigo', 'nombre', 'carrera']
+    for req in required:
+        if req not in field_map:
+            errors.append({
+                'row': 0,
+                'field': req,
+                'value': None,
+                'message': f'Columna requerida "{req}" no encontrada en el archivo'
+            })
+            return {'rows': [], 'errors': errors}
+
+    for row_idx, row_values in enumerate(rows):
+        row_num = row_idx + 1
+
+        codigo = _get_value(row_values, field_map, 'codigo')
+        nombre = _get_value(row_values, field_map, 'nombre')
+        carrera_val = _get_value(row_values, field_map, 'carrera')
+        creditos_str = _get_value(row_values, field_map, 'creditos')
+
+        row_errors = []
+
+        if not codigo:
+            row_errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo, 'message': 'El código es requerido'
+            })
+        elif len(codigo) > 20:
+            row_errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo, 'message': 'El código no debe exceder 20 caracteres'
+            })
+
+        if not nombre:
+            row_errors.append({
+                'row': row_num, 'field': 'nombre',
+                'value': nombre, 'message': 'El nombre es requerido'
+            })
+
+        if not carrera_val:
+            row_errors.append({
+                'row': row_num, 'field': 'carrera',
+                'value': carrera_val, 'message': 'La carrera es requerida'
+            })
+
+        if row_errors:
+            errors.extend(row_errors)
+            result_rows.append({
+                'codigo': codigo, 'nombre': nombre,
+                'carrera': carrera_val,
+                'valid': False,
+            })
+            continue
+
+        # Validar carrera
+        carrera = _resolve_carrera(carrera_val)
+        if not carrera:
+            errors.append({
+                'row': row_num, 'field': 'carrera',
+                'value': carrera_val,
+                'message': f'La carrera "{carrera_val}" no existe en el sistema'
+            })
+            result_rows.append({
+                'codigo': codigo, 'nombre': nombre,
+                'carrera': carrera_val,
+                'valid': False,
+            })
+            continue
+
+        # Validar unicidad de codigo dentro de la misma carrera
+        if Materia.query.filter_by(codigo=codigo, carrera_id=carrera.id).first():
+            errors.append({
+                'row': row_num, 'field': 'codigo',
+                'value': codigo,
+                'message': f'El código "{codigo}" ya existe para la carrera "{carrera.nombre}"'
+            })
+            result_rows.append({
+                'codigo': codigo, 'nombre': nombre,
+                'carrera': carrera_val,
+                'carrera_id': carrera.id,
+                'valid': False,
+            })
+            continue
+
+        creditos = _parse_int(creditos_str) if creditos_str else 0
+
+        row_data = {
+            'codigo': codigo.upper().strip(),
+            'nombre': nombre.strip(),
+            'carrera_id': carrera.id,
+            'creditos': creditos,
+            'valid': True,
+        }
+        result_rows.append(row_data)
+
+    return {'rows': result_rows, 'errors': errors}
+
+
+# ============================================================
 # ENDPOINT: PREVIEW
 # ============================================================
 
@@ -881,9 +1096,9 @@ def preview_import():
     """
     # Validar tipo
     tipo = request.form.get('tipo', '').strip().lower()
-    if tipo not in ('alumnos', 'calificaciones', 'pagos'):
+    if tipo not in ('alumnos', 'calificaciones', 'pagos', 'carreras', 'materias'):
         return jsonify({
-            'error': 'Tipo de importación inválido. Use: alumnos, calificaciones o pagos',
+            'error': 'Tipo de importación inválido. Use: alumnos, calificaciones, pagos, carreras o materias',
             'code': 'INVALID_TYPE'
         }), 400
 
@@ -944,6 +1159,8 @@ def preview_import():
         'alumnos': ['numero_control', 'nombre', 'apellido_paterno', 'apellido_materno', 'email', 'carrera'],
         'calificaciones': ['numero_control', 'materia', 'calificacion_final', 'periodo', 'anio'],
         'pagos': ['numero_control', 'concepto', 'monto', 'fecha_emision', 'pagada'],
+        'carreras': ['codigo', 'nombre', 'descripcion', 'activa'],
+        'materias': ['codigo', 'nombre', 'carrera', 'creditos'],
     }
 
     # Ejecutar parser correspondiente
@@ -951,6 +1168,8 @@ def preview_import():
         'alumnos': _parse_alumnos,
         'calificaciones': _parse_calificaciones,
         'pagos': _parse_pagos,
+        'carreras': _parse_carreras,
+        'materias': _parse_materias,
     }
 
     parser_result = parsers[tipo](headers, preview_rows)
@@ -1010,9 +1229,9 @@ def execute_import():
     """
     # Validar tipo
     tipo = request.form.get('tipo', '').strip().lower()
-    if tipo not in ('alumnos', 'calificaciones', 'pagos'):
+    if tipo not in ('alumnos', 'calificaciones', 'pagos', 'carreras', 'materias'):
         return jsonify({
-            'error': 'Tipo de importación inválido. Use: alumnos, calificaciones o pagos',
+            'error': 'Tipo de importación inválido. Use: alumnos, calificaciones, pagos, carreras o materias',
             'code': 'INVALID_TYPE'
         }), 400
 
@@ -1067,6 +1286,8 @@ def execute_import():
         'alumnos': _parse_alumnos,
         'calificaciones': _parse_calificaciones,
         'pagos': _parse_pagos,
+        'carreras': _parse_carreras,
+        'materias': _parse_materias,
     }
 
     parser_result = parsers[tipo](headers, all_rows)
@@ -1192,6 +1413,26 @@ def _execute_transaction(tipo, rows, admin_id):
                 db.session.add(nota)
                 created += 1
 
+            elif tipo == 'carreras':
+                carrera = Carrera(
+                    codigo=row_data['codigo'],
+                    nombre=row_data['nombre'],
+                    descripcion=row_data.get('descripcion'),
+                    activa=row_data['activa'],
+                )
+                db.session.add(carrera)
+                created += 1
+
+            elif tipo == 'materias':
+                materia = Materia(
+                    codigo=row_data['codigo'],
+                    nombre=row_data['nombre'],
+                    carrera_id=row_data['carrera_id'],
+                    creditos=row_data['creditos'],
+                )
+                db.session.add(materia)
+                created += 1
+
         # Commit batch
         db.session.commit()
 
@@ -1206,6 +1447,10 @@ def _execute_transaction(tipo, rows, admin_id):
         }
     elif tipo == 'pagos':
         details = {'pagos_creados': created}
+    elif tipo == 'carreras':
+        details = {'carreras_importadas': created}
+    elif tipo == 'materias':
+        details = {'materias_importadas': created}
 
     return {
         'status': 'success',

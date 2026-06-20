@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Users,
   CreditCard,
+  BookOpen,
+  Building2,
 } from 'lucide-react';
 
 // ── Constants ──────────────────────────────────────────────
@@ -36,6 +38,18 @@ const TIPOS = [
     label: 'Pagos',
     icon: CreditCard,
     description: 'Importar notas de remisión con concepto, monto y fechas',
+  },
+  {
+    id: 'carreras',
+    label: 'Carreras',
+    icon: Building2,
+    description: 'Importar carreras con código, nombre y descripción',
+  },
+  {
+    id: 'materias',
+    label: 'Materias',
+    icon: BookOpen,
+    description: 'Importar materias con código, nombre, carrera y créditos',
   },
 ];
 
@@ -653,6 +667,16 @@ export default function AdminImportar() {
                   {result.details.pagos_creados > 0 && (
                     <span>
                       Pagos: <strong>{result.details.pagos_creados}</strong>
+                    </span>
+                  )}
+                  {result.details.carreras_importadas > 0 && (
+                    <span>
+                      Carreras: <strong>{result.details.carreras_importadas}</strong>
+                    </span>
+                  )}
+                  {result.details.materias_importadas > 0 && (
+                    <span>
+                      Materias: <strong>{result.details.materias_importadas}</strong>
                     </span>
                   )}
                   {result.created !== undefined && result.created > 0 && (
