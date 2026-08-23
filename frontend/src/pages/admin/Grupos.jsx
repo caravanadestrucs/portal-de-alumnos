@@ -6,6 +6,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Select from '../../components/ui/Select';
+import EmptyState from '../../components/ui/EmptyState';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -279,18 +280,14 @@ export default function AdminGrupos() {
           <TableSkeleton rows={8} columns={5} />
         </Card>
       ) : filteredGrupos.length === 0 ? (
-        <Card className="text-center py-12">
-          <Users size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">No hay grupos registrados</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Crea el primer grupo para comenzar
-          </p>
-          <div className="mt-4">
-            <Button onClick={openNewModal}>
-              <Plus size={18} />
-              Crear primer grupo
-            </Button>
-          </div>
+        <Card>
+          <EmptyState
+            icon={Users}
+            title="No hay grupos registrados"
+            description="Crea el primer grupo para comenzar"
+            actionLabel="Crear primer grupo"
+            onAction={openNewModal}
+          />
         </Card>
       ) : (
         <Card>
@@ -408,24 +405,19 @@ export default function AdminGrupos() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Carrera *
-                </label>
-                <select
-                  required
-                  value={formData.carrera_id}
-                  onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar carrera</option>
-                  {carreras.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Carrera *"
+                required
+                value={formData.carrera_id}
+                onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })}
+              >
+                <option value="">Seleccionar carrera</option>
+                {carreras.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </Select>
 
               <div className="flex items-center gap-2">
                 <input

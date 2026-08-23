@@ -348,45 +348,33 @@ export default function AdminAsignaciones() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* 1. Seleccionar Profesor */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Profesor *
-                </label>
-                <select
-                  required
-                  value={formData.profesor_id}
-                  onChange={(e) => setFormData({ ...formData, profesor_id: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar profesor</option>
-                  {profesores.filter(p => p.activo).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.titulo} {p.nombre} {p.apellido_paterno}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Profesor *"
+                required
+                value={formData.profesor_id}
+                onChange={(e) => setFormData({ ...formData, profesor_id: parseInt(e.target.value) })}
+              >
+                <option value="">Seleccionar profesor</option>
+                {profesores.filter(p => p.activo).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.titulo} {p.nombre} {p.apellido_paterno}
+                  </option>
+                ))}
+              </Select>
 
-              {/* 2. Seleccionar Grupo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Grupo *
-                </label>
-                <select
-                  required
-                  value={formData.grupo_id}
-                  onChange={(e) => handleGrupoChange(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar grupo</option>
-                  {grupos.filter(g => g.activo).map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.nombre} - {g.carrera?.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Grupo *"
+                required
+                value={formData.grupo_id}
+                onChange={(e) => handleGrupoChange(e.target.value)}
+              >
+                <option value="">Seleccionar grupo</option>
+                {grupos.filter(g => g.activo).map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre} - {g.carrera?.nombre}
+                  </option>
+                ))}
+              </Select>
 
               {/* 3. Seleccionar Materia (solo de la carrera del grupo) */}
               <div>

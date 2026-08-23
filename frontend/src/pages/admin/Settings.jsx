@@ -3,10 +3,12 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { useToast } from '../../components/ui/Toast';
+import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, Save, Send } from 'lucide-react';
-import { getSettings, updateSettings, testEmail } from '../../api/settings';
+import { getSettings, updateSettings, testEmail, getPaymentCalendar, createPaymentEntry } from '../../api/settings';
 
 export default function AdminSettings() {
+  const { user } = useAuth();
   const toast = useToast();
   const [formData, setFormData] = useState({
     smtp_host: '',
@@ -22,6 +24,10 @@ export default function AdminSettings() {
   const [testing, setTesting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [hasPassword, setHasPassword] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [calendario, setCalendario] = useState([]);
+  const [calendarioLoading, setCalendarioLoading] = useState(false);
+  const [newEntry, setNewEntry] = useState({ concepto: '', fecha_corte: '', monto: '' });
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -48,7 +54,21 @@ export default function AdminSettings() {
       }
     };
 
+    const loadCalendario = async () => {
+      setCalendarioLoading(true);
+      try {
+        const data = await getPaymentCalendar();
+        setCalendario(Array.isArray(data) ? data : []);
+      } catch {
+        // calendario stub — no bloquea settings
+        setCalendario([]);
+      } finally {
+        setCalendarioLoading(false);
+      }
+    };
+
     loadSettings();
+    loadCalendario();
   }, []);
 
   const handleChange = (e) => {
@@ -105,10 +125,10 @@ export default function AdminSettings() {
     }
   };
 
-  const handleTestEmail = async () => {
+  const handleTestEmail = async (toEmail) => {
     setTesting(true);
     try {
-      await testEmail();
+      await testEmail(toEmail || testEmailTo);
       toast.success('Email de prueba enviado exitosamente');
     } catch (error) {
       const message = error.response?.data?.error || 'Error al enviar email de prueba';
@@ -228,21 +248,38 @@ export default function AdminSettings() {
             </label>
           </div>
 
+          {/* Save button */}
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" loading={saving} variant="primary">
               <Save size={18} />
               Guardar configuración
             </Button>
-            <Button
-              type="button"
-              onClick={handleTestEmail}
-              loading={testing}
-              variant="outline"
-            >
-              <Send size={18} />
-              Enviar email de prueba
-            </Button>
+
+            {/* Test email recipient */}
+            <div className="flex items-center gap-2 ml-auto">
+              <input
+                type="email"
+                placeholder={user?.email || 'Correo para prueba'}
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                className="w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+              />
+              <Button
+                type="button"
+                onClick={() => handleTestEmail(testEmailTo)}
+                loading={testing}
+                variant="outline"
+                size="sm"
+                disabled={!formData.smtp_host}
+              >
+                <Send size={16} />
+                Enviar prueba
+              </Button>
+            </div>
           </div>
+          <p className="text-xs text-gray-400 text-right -mt-2">
+            Si se deja vacío, se envía al email del administrador
+          </p>
         </form>
       </Card>
 
@@ -266,6 +303,71 @@ export default function AdminSettings() {
             onChange={handleChange}
           />
         </div>
+      </Card>
+
+      {/* Calendario de Pagos CRUD wiring */}
+      <Card title="Calendario de Pagos" subtitle="Define fechas de corte y conceptos mensuales (conectado a api/settings)">
+        {calendarioLoading ? (
+          <p className="text-sm text-gray-500">Cargando calendario...</p>
+        ) : (
+          <>
+            <div className="space-y-2 mb-4">
+              {calendario.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin entradas aún — creá la primera abajo.</p>
+              ) : (
+                calendario.map((e, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl text-sm">
+                    <span>{e.concepto || e.mes || `Entrada ${i + 1}`}</span>
+                    <span className="text-gray-500">{e.fecha_corte || e.fecha || ''}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Input
+                label="Concepto"
+                placeholder="Colegiatura Marzo"
+                value={newEntry.concepto}
+                onChange={(e) => setNewEntry({ ...newEntry, concepto: e.target.value })}
+              />
+              <Input
+                label="Fecha corte"
+                type="date"
+                value={newEntry.fecha_corte}
+                onChange={(e) => setNewEntry({ ...newEntry, fecha_corte: e.target.value })}
+              />
+              <Input
+                label="Monto"
+                type="number"
+                placeholder="1500"
+                value={newEntry.monto}
+                onChange={(e) => setNewEntry({ ...newEntry, monto: e.target.value })}
+              />
+            </div>
+            <div className="mt-3">
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!newEntry.concepto || !newEntry.fecha_corte) {
+                    toast.error('Concepto y fecha requeridos');
+                    return;
+                  }
+                  try {
+                    await createPaymentEntry(newEntry);
+                    toast.success('Entrada creada (stub — verifica backend /config/calendario)');
+                    setCalendario((prev) => [...prev, newEntry]);
+                    setNewEntry({ concepto: '', fecha_corte: '', monto: '' });
+                  } catch {
+                    toast.error('Error al crear entrada');
+                  }
+                }}
+              >
+                Agregar al calendario
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Wired a <code>api/settings.js:getPaymentCalendar/createPaymentEntry</code> — backend stub /config/calendario</p>
+          </>
+        )}
       </Card>
     </div>
   );

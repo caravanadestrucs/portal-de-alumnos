@@ -1,15 +1,32 @@
 schema: spec-driven
 
 context: |
-  Tech stack: Flask (Python) + React (Vite + Tailwind)
-  Database: SQLite (dev) / MySQL (prod via pymysql)
-  Auth: Flask-JWT-Extended (3 roles: admin, alumno, profesor)
-  ORM: SQLAlchemy, Flask-Migrate
-  HTTP client: axios
-  Icons: lucide-react
-  Build: Vite 5.x + React 18.x
-  Deploy: Docker + Dokploy on VPS (89.116.51.59)
-  Testing: None configured
+  Tech stack: Flask (Python) + React (Vite 5 + Tailwind 3.4)
+  Database: SQLite (dev) / MySQL (prod via pymysql) + SQLAlchemy + Flask-Migrate
+  Auth: Flask-JWT-Extended (3 roles: admin, alumno, profesor) — JWT 2h
+  Architecture: Monorepo backend/ (Flask REST /api) + frontend/ (React) — Docker + Dokploy VPS 89.116.51.59
+  Build: Vite 5 + React 18 + axios + lucide-react + react-router-dom
+  Testing: pytest (backend) + vitest/jsdom + Playwright E2E (frontend) — 12 pytest + 5 vitest + 3 e2e specs
+
+strict_tdd: true
+
+testing:
+  runner:
+    backend: "pytest -v --tb=short"
+    frontend: "npm run test -- vitest run"
+    e2e: "npx playwright test"
+  layers:
+    unit: { available: true, tool: "vitest + pytest" }
+    integration: { available: true, tool: "@testing-library/react + httpx" }
+    e2e: { available: true, tool: "Playwright" }
+  coverage:
+    available: true
+    backend: "pytest --cov (pytest-cov)"
+    frontend: "vitest run --coverage"
+  quality:
+    linter: { available: false, command: "—" }
+    type_checker: { available: false, command: "—" }
+    formatter: { available: false, command: "—" }
 
 rules:
   proposal:
@@ -33,3 +50,12 @@ rules:
     - Compare implementation against every spec scenario
   archive:
     - Warn before merging destructive deltas (large removals)
+
+apply:
+  tdd: true
+  test_command: "pytest -v --tb=short"
+
+verify:
+  test_command: "pytest -v --tb=short && npm run test -- vitest run"
+  build_command: "npm run build"
+  coverage_threshold: 0

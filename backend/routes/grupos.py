@@ -4,6 +4,7 @@ Rutas para gestión de Grupos
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 
+from sqlalchemy.orm import joinedload
 from models import db, Grupo, GrupoIntegrante, Alumno, Carrera
 from utils.decorators import admin_required
 
@@ -29,7 +30,7 @@ def get_grupos():
     except ValueError:
         per_page = 20
     
-    query = Grupo.query
+    query = Grupo.query.options(joinedload(Grupo.carrera))
     
     if carrera_id:
         query = query.filter_by(carrera_id=carrera_id)
@@ -178,9 +179,9 @@ def get_integrantes(grupo_id):
     """
     Obtiene los integrantes de un grupo
     """
-    grupo = Grupo.query.get_or_404(grupo_id)
+    grupo = Grupo.query.options(joinedload(Grupo.carrera)).get_or_404(grupo_id)
     
-    integrantes = grupo.integrantes.all()
+    integrantes = GrupoIntegrante.query.filter_by(grupo_id=grupo_id).options(joinedload(GrupoIntegrante.alumno)).all()
     
     return jsonify({
         'grupo': grupo.to_dict(),

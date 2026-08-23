@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToasterProvider } from './components/ui/Toast';
 
@@ -25,8 +26,11 @@ import AdminGrupos from './pages/admin/Grupos';
 import AdminAsignaciones from './pages/admin/Asignaciones';
 import AdminAdmins from './pages/admin/Admins';
 import AdminRequisitos from './pages/admin/Requisitos';
-import AdminImportar from './pages/admin/Importar';
-import AdminBoletas from './pages/admin/Boletas';
+// Lazy-loaded heavy pages — split to reduce initial bundle
+// TODO S3: virtualización con tanstack-virtual para tablas grandes (Importar preview)
+// See frontend/src/hooks/useImport.js and components/import/ImportSteps.jsx placeholders
+const AdminImportar = lazy(() => import('./pages/admin/Importar'));
+const AdminBoletas = lazy(() => import('./pages/admin/Boletas'));
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
@@ -85,6 +89,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToasterProvider>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div></div>}>
           <Routes>
             {/* Public Routes */}
             <Route
@@ -178,6 +183,7 @@ function App() {
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          </Suspense>
         </ToasterProvider>
       </AuthProvider>
     </BrowserRouter>
