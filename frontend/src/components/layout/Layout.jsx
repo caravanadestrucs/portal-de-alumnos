@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import { useSidebarCollapsed } from '../../hooks/useSidebarCollapsed';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-accent-50">

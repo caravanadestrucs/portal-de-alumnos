@@ -4,6 +4,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import api from '../../api';
 import { Plus, Pencil, Trash2, Key, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -21,7 +22,8 @@ export default function AdminAdmins() {
     password: '',
   });
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
   const [error, setError] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -92,17 +94,18 @@ export default function AdminAdmins() {
     }
   };
 
-  const handleDelete = async (admin) => {
-    if (!confirm(`¿Eliminar a ${admin.nombre}? Esta acción no se puede deshacer.`)) return;
-
-    setDeletingId(admin.id);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await api.delete(`/admins/${admin.id}`);
+      await api.delete(`/admins/${deleteTarget.id}`);
+      toast.success('Administrador eliminado');
+      setDeleteTarget(null);
       fetchAdmins();
     } catch (err) {
       toast.error(err.response?.data?.error || err.message || 'Error');
     } finally {
-      setDeletingId(null);
+      setIsDeleting(false);
     }
   };
 
@@ -227,12 +230,12 @@ export default function AdminAdmins() {
                         </button>
                         {admin.id !== user?.id && (
                           <button
-                            onClick={() => handleDelete(admin)}
-                            disabled={deletingId === admin.id}
-                            className={`p-2 rounded-lg transition-colors ${deletingId === admin.id ? 'opacity-50 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
+                            onClick={() => setDeleteTarget(admin)}
+                            disabled={isDeleting && deleteTarget?.id === admin.id}
+                            className={`p-2 rounded-lg transition-colors ${isDeleting && deleteTarget?.id === admin.id ? 'opacity-50 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
                             title="Eliminar"
                           >
-                            {deletingId === admin.id ? (
+                            {isDeleting && deleteTarget?.id === admin.id ? (
                               <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
                             ) : (
                               <Trash2 size={16} />
@@ -248,6 +251,18 @@ export default function AdminAdmins() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar administrador"
+        message={deleteTarget ? `¿Eliminar a ${deleteTarget.nombre} (${deleteTarget.username})?` : '¿Eliminar este administrador?'}
+        impactSummary="Esta acción no se puede deshacer. El administrador perderá acceso inmediatamente."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
       {/* Modal Crear/Editar */}
       <Modal

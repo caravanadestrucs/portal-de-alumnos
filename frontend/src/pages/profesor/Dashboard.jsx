@@ -83,8 +83,9 @@ export default function ProfesorDashboard() {
         {loading ? (
           <TableSkeleton rows={5} columns={3} />
         ) : asignaciones.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No tienes asignaciones activas en este período
+          <div className="glass p-8 text-center">
+            <p className="font-medium text-gray-700">Fuera de período lectivo</p>
+            <p className="text-sm text-gray-500 mt-1">El cuatrimestre actual no tiene asignaciones activas. Tus grupos volverán en el próximo período.</p>
           </div>
         ) : (
           <div className="space-y-4">

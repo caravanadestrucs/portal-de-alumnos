@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, CheckCircle, XCircle, DollarSign, Trash2, AlertTriangle, Search, User, ArrowLeft } from 'lucide-react';
 
 export default function AdminPagos() {
@@ -28,6 +29,8 @@ export default function AdminPagos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const searchRef = useRef(null);
   
   const [formData, setFormData] = useState({
@@ -122,17 +125,20 @@ export default function AdminPagos() {
     }
   };
 
-  const handleDeletePago = async (pago) => {
-    if (!confirm(`¿Eliminar "${pago.concepto}"?\n\nMonto: $${pago.monto}\n\nEsta acción no se puede deshacer.`)) return;
-    
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await deletePago(pago.id);
-      setPagos(prev => prev.filter(p => p.id !== pago.id));
+      await deletePago(deleteTarget.id);
+      setPagos(prev => prev.filter(p => p.id !== deleteTarget.id));
       const data = await getAlumnosConPagosPendientes();
       setPagosPendientesData(data);
       toast.success('Nota eliminada correctamente');
+      setDeleteTarget(null);
     } catch (error) {
-      toast.error('Error al eliminar el pago');
+      toast.error(error.response?.data?.error || 'Error al eliminar el pago');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -175,7 +181,12 @@ export default function AdminPagos() {
     return new Date(dateString).toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  // Mora now comes from backend - frontend calc deprecated
   const calcularMora = (pago) => {
+    // Prefer backend-provided mora when available
+    if (pago.intereses_mora != null) return pago.intereses_mora;
+    if (pago.mora != null) return pago.mora;
+    // Fallback frontend calc (deprecated) — Math.ceil((hoy-corte)/86400000)*5
     if (!pago.fecha_corte || pago.pagada) return 0;
     const hoy = new Date();
     const fechaCorte = new Date(pago.fecha_corte);
@@ -446,7 +457,7 @@ export default function AdminPagos() {
                                 )}
                               </button>
                               <button
-                                onClick={() => handleDeletePago(pago)}
+                                onClick={() => setDeleteTarget(pago)}
                                 className="p-2 hover:bg-red-50 rounded-lg transition-colors text-red-500"
                                 title="Eliminar"
                               >
@@ -464,6 +475,18 @@ export default function AdminPagos() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar nota"
+        message={deleteTarget ? `¿Eliminar "${deleteTarget.concepto}"?` : '¿Eliminar esta nota?'}
+        impactSummary={deleteTarget ? `Monto: $${deleteTarget.monto}. Esta acción no se puede deshacer.` : undefined}
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
       {/* Modal Nueva Nota */}
       {isModalOpen && (

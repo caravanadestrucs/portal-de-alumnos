@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, Users, UserPlus, UserMinus, Search } from 'lucide-react';
 
 export default function AdminGrupos() {
@@ -24,7 +25,10 @@ export default function AdminGrupos() {
     activo: true,
   });
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [isRemoving, setIsRemoving] = useState(false);
   const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroCarrera, setFiltroCarrera] = useState('');
@@ -41,6 +45,7 @@ export default function AdminGrupos() {
     loadCarreras();
   }, []);
 
+  // TODO Sprint 3: paginar getGrupos() con server pagination — hoy carga todo sin params y filtra en cliente
   const loadGrupos = async () => {
     setLoading(true);
     try {
@@ -102,7 +107,10 @@ export default function AdminGrupos() {
     setSelectedGrupo(grupo);
     await loadIntegrantes(grupo.id);
     try {
-      const data = await getAlumnos({ per_page: 200 });
+      // TODO Sprint 3: paginar alumnos con server search — hoy carga 500 y filtra en cliente
+      // Aumentado de 200 a 500 temporalmente para cubrir 200+ alumnos sin romper búsqueda cliente.
+      // Límite backend actual caps per_page a 100 (Task 17), así que 500 se recorta a 100 hasta que se implemente search paginado.
+      const data = await getAlumnos({ per_page: 500 });
       setAlumnos(data?.alumnos || []);
     } catch (error) {
       console.error('Error loading alumnos:', error);
@@ -138,17 +146,18 @@ export default function AdminGrupos() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este grupo?')) {
-      setDeletingId(id);
-      try {
-        await deleteGrupo(id);
-        loadGrupos();
-      } catch (error) {
-        toast.error(error.response?.data?.error || 'Error al eliminar');
-      } finally {
-        setDeletingId(null);
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteGrupo(deleteTarget.id);
+      toast.success('Grupo eliminado');
+      setDeleteTarget(null);
+      loadGrupos();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -195,13 +204,18 @@ export default function AdminGrupos() {
     }
   };
 
-  const handleRemoveIntegrante = async (alumnoId) => {
-    if (!confirm('¿Remover este alumno del grupo?')) return;
+  const handleConfirmRemoveIntegrante = async () => {
+    if (!removeTarget || !selectedGrupo) return;
+    setIsRemoving(true);
     try {
-      await removeIntegrante(selectedGrupo.id, alumnoId);
+      await removeIntegrante(selectedGrupo.id, removeTarget.alumno_id);
+      toast.success('Alumno removido del grupo');
+      setRemoveTarget(null);
       await loadIntegrantes(selectedGrupo.id);
     } catch (error) {
       toast.error(error.response?.data?.error || 'Error al remover');
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -351,11 +365,11 @@ export default function AdminGrupos() {
                           <Edit size={18} className="text-primary-500" />
                         </button>
                         <button
-                          onClick={() => handleDelete(grupo.id)}
-                          disabled={deletingId === grupo.id}
-                          className={`p-2 rounded-lg transition-colors ${deletingId === grupo.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
+                          onClick={() => setDeleteTarget(grupo)}
+                          disabled={isDeleting && deleteTarget?.id === grupo.id}
+                          className={`p-2 rounded-lg transition-colors ${isDeleting && deleteTarget?.id === grupo.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          {deletingId === grupo.id ? (
+                          {isDeleting && deleteTarget?.id === grupo.id ? (
                             <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <Trash2 size={18} className="text-red-500" />
@@ -447,6 +461,29 @@ export default function AdminGrupos() {
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar grupo"
+        message={deleteTarget ? `¿Eliminar el grupo "${deleteTarget.nombre}"?` : '¿Eliminar este grupo?'}
+        impactSummary="Se eliminarán las asignaciones y se desasociarán sus integrantes. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+
+      <ConfirmDialog
+        isOpen={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={handleConfirmRemoveIntegrante}
+        title="Remover alumno"
+        message={removeTarget ? `¿Remover a ${removeTarget.alumno?.nombre || ''} ${removeTarget.alumno?.apellido_paterno || ''} del grupo ${selectedGrupo?.nombre || ''}?` : '¿Remover este alumno del grupo?'}
+        confirmText="Remover"
+        variant="danger"
+        isLoading={isRemoving}
+      />
+
       {/* Modal Integrantes con buscador dinámico */}
       {showIntegrantesModal && selectedGrupo && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -533,8 +570,9 @@ export default function AdminGrupos() {
                           </p>
                         </div>
                         <button
-                          onClick={() => handleRemoveIntegrante(i.alumno_id)}
+                          onClick={() => setRemoveTarget(i)}
                           className="p-2 hover:bg-red-50 rounded-lg"
+                          title="Remover del grupo"
                         >
                           <UserMinus size={18} className="text-red-500" />
                         </button>

@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, Calendar, Users } from 'lucide-react';
 
 export default function AdminAsignaciones() {
@@ -35,7 +36,8 @@ export default function AdminAsignaciones() {
   const [grupoCarreraId, setGrupoCarreraId] = useState(null);
   
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
   const [filtroProfesor, setFiltroProfesor] = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
@@ -151,17 +153,18 @@ export default function AdminAsignaciones() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Eliminar esta asignación?')) {
-      setDeletingId(id);
-      try {
-        await deleteAsignacion(id);
-        loadData();
-      } catch (error) {
-        toast.error(error.response?.data?.error || 'Error al eliminar');
-      } finally {
-        setDeletingId(null);
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteAsignacion(deleteTarget.id);
+      toast.success('Asignación eliminada');
+      setDeleteTarget(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -316,11 +319,11 @@ export default function AdminAsignaciones() {
                           <Edit size={18} className="text-primary-500" />
                         </button>
                         <button
-                          onClick={() => handleDelete(a.id)}
-                          disabled={deletingId === a.id}
-                          className={`p-2 rounded-lg ${deletingId === a.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
+                          onClick={() => setDeleteTarget(a)}
+                          disabled={isDeleting && deleteTarget?.id === a.id}
+                          className={`p-2 rounded-lg ${isDeleting && deleteTarget?.id === a.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          {deletingId === a.id ? (
+                          {isDeleting && deleteTarget?.id === a.id ? (
                             <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
                           ) : (
                             <Trash2 size={18} className="text-red-500" />
@@ -335,6 +338,18 @@ export default function AdminAsignaciones() {
           </div>
         </Card>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar asignación"
+        message={deleteTarget ? `¿Eliminar la asignación de ${deleteTarget.profesor?.nombre || 'este profesor'} — ${deleteTarget.materia?.nombre || 'materia'} (${deleteTarget.grupo?.nombre || 'grupo'})?` : '¿Eliminar esta asignación?'}
+        impactSummary="El profesor perderá acceso a calificar este grupo/materia."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
       {/* Modal */}
       {showModal && (

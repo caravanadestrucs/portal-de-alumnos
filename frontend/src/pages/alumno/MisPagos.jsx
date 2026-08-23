@@ -5,6 +5,7 @@ import Badge from '../../components/ui/Badge';
 import * as pagosApi from '../../api/pagos';
 import { CreditCard, CheckCircle, XCircle, DollarSign, Calendar } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
+// Mora now comes from backend - frontend calc deprecated (prefer nota.mora / nota.intereses_mora when available)
 
 export default function MisPagos() {
   const { user } = useAuth();

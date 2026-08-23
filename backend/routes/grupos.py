@@ -24,7 +24,10 @@ def get_grupos():
     carrera_id = request.args.get('carrera_id', type=int)
     activo = request.args.get('activo')
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
     query = Grupo.query
     
@@ -61,8 +64,8 @@ def get_grupo(grupo_id):
 
 
 @grupos_bp.route('', methods=['POST'])
-@admin_required
 @jwt_required()
+@admin_required
 def create_grupo():
     """
     Crea un nuevo grupo
@@ -113,8 +116,8 @@ def create_grupo():
 
 
 @grupos_bp.route('/<int:grupo_id>', methods=['PUT'])
-@admin_required
 @jwt_required()
+@admin_required
 def update_grupo(grupo_id):
     """
     Actualiza un grupo
@@ -146,8 +149,8 @@ def update_grupo(grupo_id):
     }), 200
 
 @grupos_bp.route('/<int:grupo_id>', methods=['DELETE'])
-@admin_required
 @jwt_required()
+@admin_required
 def delete_grupo(grupo_id):
     """
     Elimina un grupo y sus integrantes
@@ -187,8 +190,8 @@ def get_integrantes(grupo_id):
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes', methods=['POST'])
-@admin_required
 @jwt_required()
+@admin_required
 def add_integrante(grupo_id):
     """
     Agrega un alumno al grupo
@@ -234,8 +237,8 @@ def add_integrante(grupo_id):
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes/<int:alumno_id>', methods=['DELETE'])
-@admin_required
 @jwt_required()
+@admin_required
 def remove_integrante(grupo_id, alumno_id):
     """
     Remueve un integrante del grupo
@@ -257,8 +260,8 @@ def remove_integrante(grupo_id, alumno_id):
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes/bulk', methods=['POST'])
-@admin_required
 @jwt_required()
+@admin_required
 def add_integrantes_bulk(grupo_id):
     """
     Agrega múltiples alumnos al grupo

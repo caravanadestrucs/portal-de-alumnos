@@ -18,8 +18,8 @@ docker-compose up -d --build
 ```
 
 ## Acceder
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000
+- **Frontend**: http://localhost:3050
+- **Backend API**: http://localhost:5050
 
 ## Detener
 ```bash

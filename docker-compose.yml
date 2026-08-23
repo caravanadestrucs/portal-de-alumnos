@@ -13,6 +13,11 @@ services:
       - FLASK_APP=app.py
       - DATABASE_URL=sqlite:////app/instance/portal.db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - portal-network
 
@@ -40,5 +45,4 @@ networks:
     driver: bridge
 
 volumes:
-  portal-network:
   portal-db:

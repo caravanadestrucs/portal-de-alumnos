@@ -1,3 +1,4 @@
+# TODO Sprint 3: multi-stage build with nginx for prod
 FROM node:18-alpine
 
 WORKDIR /app

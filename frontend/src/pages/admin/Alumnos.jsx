@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { TableSkeleton } from '../../components/ui/Skeleton';
@@ -391,26 +392,20 @@ export default function AdminAlumnos() {
             required
           />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Carrera
-            </label>
-            <select
-              name="carrera_id"
-              value={formData.carrera_id}
-              onChange={(e) => setFormData({ ...formData, carrera_id: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-              required
-            >
-              <option value="">Seleccionar carrera</option>
-              {Array.isArray(carreras) &&
-                carreras.map((carrera) => (
-                  <option key={carrera.id} value={carrera.id}>
-                    {carrera.nombre}
-                  </option>
-                ))}
-            </select>
-          </div>
+          <Select
+            label="Carrera"
+            value={formData.carrera_id}
+            onChange={(e) => setFormData({ ...formData, carrera_id: e.target.value })}
+            required
+          >
+            <option value="">Seleccionar carrera</option>
+            {Array.isArray(carreras) &&
+              carreras.map((carrera) => (
+                <option key={carrera.id} value={carrera.id}>
+                  {carrera.nombre}
+                </option>
+              ))}
+          </Select>
 
           {!editingAlumno ? (
             <Input

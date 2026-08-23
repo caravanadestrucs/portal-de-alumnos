@@ -6,6 +6,7 @@ import Button from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { Save, User, BookOpen, Search, X } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
+import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
 
 export default function AdminCalificaciones() {
   const toast = useToast();
@@ -130,32 +131,67 @@ export default function AdminCalificaciones() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // SAFE bulk prep: bulk endpoint may not exist yet (backend currently exposes POST /calificaciones/bulk)
+      // Keep sequential loop as fallback — do NOT remove until bulk is verified.
+      // Bulk option (comentada) para migración futura:
+      // try {
+      //   const payload = calificaciones.map(c => ({
+      //     id: c.id,
+      //     alumno_id: c.alumno_id,
+      //     materia_id: c.materia_id,
+      //     asistencia_1: c.asistencia_1,
+      //     asistencia_2: c.asistencia_2,
+      //     asistencia_3: c.asistencia_3,
+      //     asistencia_4: c.asistencia_4,
+      //     asistencia_5: c.asistencia_5,
+      //     practica_1: c.practica_1,
+      //     practica_2: c.practica_2,
+      //     extra_1: c.extra_1,
+      //     extra_2: c.extra_2,
+      //     calificacion_final: c.calificacion_final,
+      //   }));
+      //   await calificacionesApi.bulkUpdateCalificaciones(payload);
+      //   toast.success(`${payload.length} calificaciones guardadas`);
+      //   return;
+      // } catch (bulkError) {
+      //   console.warn('Bulk no disponible, fallback a secuencial:', bulkError?.response?.status);
+      // }
+
+      // Fallback secuencial — con try/catch por lote para no perder todo si una falla
+      let successCount = 0;
+      let failCount = 0;
       for (const cal of calificaciones) {
-        await calificacionesApi.updateCalificacion(cal.id, {
-          asistencia_1: cal.asistencia_1,
-          asistencia_2: cal.asistencia_2,
-          asistencia_3: cal.asistencia_3,
-          asistencia_4: cal.asistencia_4,
-          asistencia_5: cal.asistencia_5,
-          practica_1: cal.practica_1,
-          practica_2: cal.practica_2,
-          extra_1: cal.extra_1,
-          extra_2: cal.extra_2,
-          calificacion_final: cal.calificacion_final,
-        });
+        try {
+          await calificacionesApi.updateCalificacion(cal.id, {
+            asistencia_1: cal.asistencia_1,
+            asistencia_2: cal.asistencia_2,
+            asistencia_3: cal.asistencia_3,
+            asistencia_4: cal.asistencia_4,
+            asistencia_5: cal.asistencia_5,
+            practica_1: cal.practica_1,
+            practica_2: cal.practica_2,
+            extra_1: cal.extra_1,
+            extra_2: cal.extra_2,
+            calificacion_final: cal.calificacion_final,
+          });
+          successCount++;
+        } catch (rowError) {
+          console.error(`Error guardando calificacion ${cal.id}:`, rowError);
+          failCount++;
+        }
       }
-      toast.success('Calificaciones guardadas exitosamente');
+      if (failCount === 0) {
+        toast.success(`${successCount} calificaciones guardadas exitosamente`);
+      } else if (successCount > 0) {
+        toast.success(`${successCount} guardadas, ${failCount} con error`);
+      } else {
+        throw new Error('No se pudo guardar ninguna calificación');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Error al guardar');
+      toast.error(error.response?.data?.message || error.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
-  };
-
-  const getGradeClass = (grade) => {
-    if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
-    if (grade >= 8) return 'text-green-600 font-bold';
-    return 'text-red-500';
   };
 
   return (

@@ -8,7 +8,7 @@ from datetime import timedelta
 
 class Config:
     """Configuración base"""
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=2)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
     # SQLAlchemy
@@ -49,9 +49,9 @@ class ProductionConfig(Config):
     
     def __init__(self):
         if not self.JWT_SECRET_KEY:
-            raise ValueError("JWT_SECRET_KEY environment variable is required in production")
+            raise RuntimeError("JWT_SECRET_KEY missing")
         if not self.SECRET_KEY:
-            raise ValueError("SECRET_KEY environment variable is required in production")
+            raise RuntimeError("SECRET_KEY missing")
     
     # MySQL connection string
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')

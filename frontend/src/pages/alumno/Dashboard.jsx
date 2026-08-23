@@ -5,6 +5,8 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { getMisDatos } from '../../api/alumnos';
 import { getPagosByAlumno } from '../../api/pagos';
+import { getCalificacionesByAlumno } from '../../api/calificaciones';
+import { getEffectiveGrade, getGradeClass } from '../../utils/grades';
 import { FileText, CreditCard, GraduationCap, User, TrendingUp } from 'lucide-react';
 
 export default function AlumnoDashboard() {
@@ -22,10 +24,25 @@ export default function AlumnoDashboard() {
       try {
         // Load pagos for the current alumno
         const pagos = await getPagosByAlumno(user?.id).catch(() => []);
-        
+
         if (Array.isArray(pagos)) {
           const pending = pagos.filter(p => !p.pagada).length;
           setStats(prev => ({ ...prev, pagosPendientes: pending }));
+        }
+
+        // Load calificaciones para calcular promedio — fix stats.promedio nunca se setea + NaN
+        const calificaciones = await getCalificacionesByAlumno(user?.id).catch(() => []);
+        if (Array.isArray(calificaciones) && calificaciones.length > 0) {
+          const filtered = calificaciones.filter(c => {
+            const eff = getEffectiveGrade(c);
+            return eff.value != null && eff.value !== "" && Number(eff.value) > 0;
+          });
+          const promedio = filtered.length
+            ? filtered.reduce((s, c) => s + Number(getEffectiveGrade(c).value), 0) / filtered.length
+            : null;
+          setStats(prev => ({ ...prev, promedio: promedio != null ? Number(promedio.toFixed(2)) : null }));
+        } else {
+          setStats(prev => ({ ...prev, promedio: null }));
         }
       } catch (error) {
         console.error('Error loading stats:', error);

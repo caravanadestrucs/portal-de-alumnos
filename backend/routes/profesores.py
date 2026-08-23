@@ -22,7 +22,10 @@ def get_profesores():
     """
     activo = request.args.get('activo')
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
     query = Profesor.query
     

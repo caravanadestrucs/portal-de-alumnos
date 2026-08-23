@@ -42,9 +42,10 @@ def create_app(config_name=None):
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)
     
     # Inicializar extensiones
+    # TODO: read CORS_ORIGINS from env (e.g. os.getenv("CORS_ORIGINS", "").split(","))
     CORS(app, 
          supports_credentials=True,
          origins=[
@@ -84,6 +85,7 @@ def create_app(config_name=None):
     from routes.practicas import practicas_bp
     from routes.settings import settings_bp
     from routes.imports import imports_bp
+    from routes.boletas import boletas_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(alumnos_bp, url_prefix='/api/alumnos')
@@ -100,6 +102,7 @@ def create_app(config_name=None):
     app.register_blueprint(practicas_bp, url_prefix='/api/practicas')
     app.register_blueprint(settings_bp, url_prefix='/api/config')
     app.register_blueprint(imports_bp, url_prefix='/api/imports')
+    app.register_blueprint(boletas_bp, url_prefix='/api/boletas')
     
     # Health check endpoint
     @app.route('/api/health')
@@ -204,9 +207,7 @@ with app.app_context():
         admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
-        print('[OK] Admin por defecto creado')
-        print('   Email: admin@universidadfv.edu.mx')
-        print('   Contrasena: admin123')
+        app.logger.info("Default admin created - change password on first login")
     
     # Seed de configuración por defecto
     from models import Config

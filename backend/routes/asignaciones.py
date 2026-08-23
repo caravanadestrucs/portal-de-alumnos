@@ -30,7 +30,10 @@ def get_asignaciones():
     grupo_id = request.args.get('grupo_id', type=int)
     activo = request.args.get('activo')
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
     query = Asignacion.query
     
@@ -65,8 +68,8 @@ def get_asignacion(asignacion_id):
 
 
 @asignaciones_bp.route('', methods=['POST'])
-@admin_required
 @jwt_required()
+@admin_required
 def create_asignacion():
     """
     Crea una nueva asignacion
@@ -141,8 +144,8 @@ def create_asignacion():
 
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['PUT'])
-@admin_required
 @jwt_required()
+@admin_required
 def update_asignacion(asignacion_id):
     """
     Actualiza una asignacion
@@ -201,8 +204,8 @@ def update_asignacion(asignacion_id):
 
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['DELETE'])
-@admin_required
 @jwt_required()
+@admin_required
 def delete_asignacion(asignacion_id):
     """
     Elimina una asignacion

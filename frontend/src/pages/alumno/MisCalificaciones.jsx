@@ -5,6 +5,7 @@ import Badge from '../../components/ui/Badge';
 import { getCalificacionesByAlumno } from '../../api/calificaciones';
 import { BookOpen, TrendingUp } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
+import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
 
 export default function MisCalificaciones() {
   const { user } = useAuth();
@@ -32,13 +33,6 @@ export default function MisCalificaciones() {
     loadCalificaciones();
   }, [user]);
 
-  // Escala 0-10, aprobado >= 8
-  const getGradeClass = (grade) => {
-    if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
-    if (grade >= 8) return 'text-green-600 font-bold';
-    return 'text-red-500';
-  };
-
   // Obtener la calificación final (Extra tiene prioridad sobre Final)
   const getCalificacionFinal = (cal) => {
     if (cal.extra_2 && cal.extra_2 > 0) return cal.extra_2;
@@ -54,11 +48,15 @@ export default function MisCalificaciones() {
       : { text: 'Reprobado', variant: 'danger' };
   };
 
-  // Calculate stats
+  // Calculate stats — fix NaN: filtrar solo calificadas >0 y evitar división por 0
   const totalMaterias = calificaciones.length;
-  const promedio = calificaciones.length > 0
-    ? calificaciones.reduce((sum, c) => sum + (getCalificacionFinal(c) || 0), 0) / calificaciones.filter(c => getCalificacionFinal(c) > 0).length
-    : null;
+  const filtered = calificaciones.filter(c => {
+    const eff = getEffectiveGrade(c);
+    return eff.value != null && eff.value !== "" && Number(eff.value) > 0;
+  });
+  const promedio = filtered.length
+    ? (filtered.reduce((s, c) => s + Number(getEffectiveGrade(c).value), 0) / filtered.length).toFixed(2)
+    : "-";
 
   return (
     <div className="space-y-6">
@@ -80,8 +78,8 @@ export default function MisCalificaciones() {
         <Card className="text-center">
           <TrendingUp size={28} className="mx-auto text-accent-500 mb-2" />
           <p className="text-sm text-gray-500">Promedio</p>
-          <p className={`text-2xl font-bold ${promedio ? getGradeClass(promedio) : 'text-gray-400'}`}>
-            {promedio ? promedio.toFixed(1) : '-'}
+          <p className={`text-2xl font-bold ${promedio !== "-" ? getGradeClass(promedio) : 'text-gray-400'}`}>
+            {promedio !== "-" ? Number(promedio).toFixed(1) : '-'}
           </p>
         </Card>
         <Card className="text-center">
@@ -122,7 +120,7 @@ export default function MisCalificaciones() {
               </thead>
               <tbody>
                 {calificaciones.map((cal) => {
-                  const final = getCalificacionFinal(cal);
+                  const effective = getEffectiveGrade(cal);
                   const estado = getEstado(cal);
                   return (
                     <tr key={cal.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -147,8 +145,12 @@ export default function MisCalificaciones() {
                       <td className={`text-center py-3 px-2 ${getGradeClass(cal.practica_2)}`}>
                         {cal.practica_2 || '-'}
                       </td>
-                      <td className={`text-center py-3 px-2 font-bold ${getGradeClass(final)}`}>
-                        {final || '-'}
+                      <td className={`text-center py-3 px-2 font-bold ${getGradeClass(effective.value)}`}>
+                        {effective.value != null && effective.value !== "" && Number(effective.value) !== 0 ? (
+                          <span>
+                            {effective.value} <small className="text-xs opacity-70 font-normal">({effective.source})</small>
+                          </span>
+                        ) : '-'}
                       </td>
                       <td className="text-center py-3 px-2">
                         <Badge variant={estado.variant}>
