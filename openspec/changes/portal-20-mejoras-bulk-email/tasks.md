@@ -44,8 +44,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: S2
 
-- [ ] 4.1 Tour — `OnboardingTour.jsx` — [ ] RED first login Skip persist Next 1→2→3 GREEN `localStorage onboarding_seen` — `vitest OnboardingTour` — `feat: tour`
-- [ ] 4.2 Graph — `CurriculumGraph.jsx` — [ ] RED 45 nodes 9 cols colors click GREEN grid SVG wire Carreras/MisCalif — `vitest CurriculumGraph` — `feat: graph`
+- [x] 4.1 Tour — `OnboardingTour.jsx` — [x] RED first login Skip persist Next 1→2→3 GREEN `localStorage onboarding_seen` — `vitest OnboardingTour` — `feat: tour`
+- [x] 4.2 Graph — `CurriculumGraph.jsx` — [x] RED 45 nodes 9 cols colors click GREEN grid SVG wire Carreras/MisCalif — `vitest CurriculumGraph` — `feat: graph`
 
 ## Phase 5: S3
 
