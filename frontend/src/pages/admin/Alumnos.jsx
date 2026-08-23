@@ -14,6 +14,7 @@ import ProgressModal from '../../components/ui/ProgressModal';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { Plus, Search, Edit, Trash2, UserPlus, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
+import { getEmailError, getNumeroControlError } from '../../utils/validation';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -480,6 +481,8 @@ export default function AdminAlumnos() {
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             required
+            error={getEmailError(formData.email)}
+            helper={!getEmailError(formData.email) && formData.email ? 'Email válido' : undefined}
           />
 
           <Input
@@ -488,6 +491,8 @@ export default function AdminAlumnos() {
             value={formData.numero_control}
             onChange={(e) => setFormData({ ...formData, numero_control: e.target.value })}
             required
+            error={getNumeroControlError(formData.numero_control)}
+            helper={!getNumeroControlError(formData.numero_control) && formData.numero_control ? 'Formato válido' : undefined}
           />
 
           <Select

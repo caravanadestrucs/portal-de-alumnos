@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import { getEmailError, getNumeroControlError } from '../../utils/validation';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -24,6 +25,9 @@ export default function Register() {
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const emailLiveError = getEmailError(formData.email);
+  const numeroControlLiveError = getNumeroControlError(formData.numero_control);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -148,6 +152,8 @@ export default function Register() {
               value={formData.email}
               onChange={handleChange}
               placeholder="correo@ejemplo.com"
+              error={emailLiveError}
+              helper={!emailLiveError && formData.email ? 'Formato válido' : undefined}
             />
 
             <Input
@@ -160,6 +166,8 @@ export default function Register() {
               value={formData.numero_control}
               onChange={handleChange}
               placeholder="Número de Control"
+              error={numeroControlLiveError}
+              helper={!numeroControlLiveError && formData.numero_control ? 'Formato válido: 8-14 alfanuméricos' : undefined}
             />
 
             <Input
