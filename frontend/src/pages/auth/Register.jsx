@@ -84,7 +84,11 @@ export default function Register() {
           </p>
 
           {error && (
-            <div className="flex items-center gap-2 p-4 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="flex items-center gap-2 p-4 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600"
+            >
               <AlertCircle size={18} />
               <span className="text-sm">{error}</span>
             </div>
@@ -99,74 +103,89 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <input
+              <Input
+                label="Nombre"
                 type="text"
                 name="nombre"
+                id="register-nombre"
+                autoComplete="given-name"
+                required
                 value={formData.nombre}
                 onChange={handleChange}
                 placeholder="Nombre"
-                required
-                className="w-full px-4 py-2.5 rounded-xl input-glass"
               />
-              <input
+              <Input
+                label="Apellido Paterno"
                 type="text"
                 name="apellido_paterno"
+                id="register-apellido-paterno"
+                autoComplete="family-name"
+                required
                 value={formData.apellido_paterno}
                 onChange={handleChange}
                 placeholder="Apellido Paterno"
-                required
-                className="w-full px-4 py-2.5 rounded-xl input-glass"
               />
             </div>
 
-            <input
+            <Input
+              label="Apellido Materno"
               type="text"
               name="apellido_materno"
+              id="register-apellido-materno"
+              autoComplete="family-name"
               value={formData.apellido_materno}
               onChange={handleChange}
               placeholder="Apellido Materno"
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
             />
 
-            <input
+            <Input
+              label="Correo electrónico"
               type="email"
               name="email"
+              id="register-email"
+              autoComplete="email"
+              required
               value={formData.email}
               onChange={handleChange}
-              placeholder="Correo electrónico"
-              required
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
+              placeholder="correo@ejemplo.com"
             />
 
-            <input
+            <Input
+              label="Número de Control"
               type="text"
               name="numero_control"
+              id="register-numero-control"
+              autoComplete="off"
+              required
               value={formData.numero_control}
               onChange={handleChange}
               placeholder="Número de Control"
-              required
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
             />
 
-            <input
+            <Input
+              label="Contraseña"
               type="password"
               name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Contraseña"
+              id="register-password"
+              autoComplete="new-password"
               required
               minLength={6}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="••••••••"
+              helper="Mínimo 6 caracteres"
             />
 
-            <input
+            <Input
+              label="Confirmar Contraseña"
               type="password"
               name="confirm_password"
+              id="register-confirm-password"
+              autoComplete="new-password"
+              required
               value={formData.confirm_password}
               onChange={handleChange}
-              placeholder="Confirmar Contraseña"
-              required
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
+              placeholder="••••••••"
             />
 
             <Button

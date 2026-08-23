@@ -3,6 +3,7 @@ import { getProfesores, createProfesor, updateProfesor, deleteProfesor } from '.
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, UserCheck, Users } from 'lucide-react';
@@ -24,7 +25,8 @@ export default function AdminProfesores() {
     activo: true,
   });
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -105,17 +107,18 @@ export default function AdminProfesores() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este profesor?')) {
-      setDeletingId(id);
-      try {
-        await deleteProfesor(id);
-        loadProfesores();
-      } catch (error) {
-        toast.error(error.response?.data?.error || 'Error al eliminar');
-      } finally {
-        setDeletingId(null);
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteProfesor(deleteTarget.id);
+      toast.success('Profesor eliminado');
+      setDeleteTarget(null);
+      loadProfesores();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -251,15 +254,11 @@ export default function AdminProfesores() {
                           <Edit size={18} className="text-primary-500" />
                         </button>
                         <button
-                          onClick={() => handleDelete(profesor.id)}
-                          disabled={deletingId === profesor.id}
-                          className={`p-2 rounded-lg transition-colors ${deletingId === profesor.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
+                          onClick={() => setDeleteTarget(profesor)}
+                          className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          aria-label={`Eliminar profesor ${profesor.nombre}`}
                         >
-                          {deletingId === profesor.id ? (
-                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <Trash2 size={18} className="text-red-500" />
-                          )}
+                          <Trash2 size={18} className="text-red-500" />
                         </button>
                       </div>
                     </td>
@@ -434,6 +433,22 @@ export default function AdminProfesores() {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar profesor"
+        message={
+          deleteTarget
+            ? `¿Eliminar a ${deleteTarget.nombre} ${deleteTarget.apellido_paterno || ''} (${deleteTarget.numero_empleado})?`
+            : '¿Eliminar este profesor?'
+        }
+        impactSummary="Se eliminarán sus asignaciones y calificaciones asociadas. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -1,0 +1,6 @@
+/* Centralized :focus-visible ring — replaces scattered focus: overrides */
+.input-glass:focus-visible {
+  outline: none;
+  border-color: #008a8a;
+  box-shadow: 0 0 0 3px rgba(0, 138, 138, 0.2);
+}

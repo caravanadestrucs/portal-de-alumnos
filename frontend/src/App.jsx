@@ -26,6 +26,7 @@ import AdminAsignaciones from './pages/admin/Asignaciones';
 import AdminAdmins from './pages/admin/Admins';
 import AdminRequisitos from './pages/admin/Requisitos';
 import AdminImportar from './pages/admin/Importar';
+import AdminBoletas from './pages/admin/Boletas';
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
@@ -53,8 +54,8 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRole && user.type !== allowedRole) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
+  if (allowedRole && user?.rol !== allowedRole) {
+    return <Navigate to={`/${user.rol}`} replace />;
   }
 
   return children;
@@ -73,7 +74,7 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
+    return <Navigate to={`/${user.rol}`} replace />;
   }
 
   return children;
@@ -138,9 +139,11 @@ function App() {
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
               <Route path="importar" element={<AdminImportar />} />
+              <Route path="boletas" element={<AdminBoletas />} />
               <Route path="admins" element={<AdminAdmins />} />
               {/* <Route path="requisitos" element={<AdminRequisitos />} /> */}
               <Route path="exportar" element={<AdminExport />} />
+              <Route path="configuracion" element={<AdminSettings />} />
             </Route>
 
             {/* Alumno Routes */}

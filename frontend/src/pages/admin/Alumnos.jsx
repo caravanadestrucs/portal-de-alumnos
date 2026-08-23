@@ -8,6 +8,7 @@ import Table from '../../components/ui/Table';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { Plus, Search, Edit, Trash2, UserPlus, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -36,6 +37,8 @@ export default function AdminAlumnos() {
     carrera_id: '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const toast = useToast();
 
   // ── Debounce del search ──────────────────────────────────
@@ -122,9 +125,10 @@ export default function AdminAlumnos() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleDelete(row.id);
+              setDeleteTarget(row);
             }}
             className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+            aria-label={`Eliminar alumno ${row.nombre}`}
           >
             <Trash2 size={16} className="text-red-500" />
           </button>
@@ -184,18 +188,21 @@ export default function AdminAlumnos() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este alumno?')) {
-      try {
-        await deleteAlumno(id);
-        const result = await fetchAlumnos();
-        // Si la página actual quedó vacía, retroceder una página
-        if (result && result.alumnos && result.alumnos.length === 0 && page > 1) {
-          setPage((p) => p - 1);
-        }
-      } catch (error) {
-        toast.error(error.response?.data?.message || 'Error al eliminar');
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteAlumno(deleteTarget.id);
+      toast.success('Alumno eliminado');
+      const result = await fetchAlumnos();
+      if (result && result.alumnos && result.alumnos.length === 0 && page > 1) {
+        setPage((p) => p - 1);
       }
+      setDeleteTarget(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -439,6 +446,22 @@ export default function AdminAlumnos() {
           )}
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar alumno"
+        message={
+          deleteTarget
+            ? `¿Eliminar a ${deleteTarget.nombre} ${deleteTarget.apellido_paterno || ''} (${deleteTarget.numero_control})?`
+            : '¿Eliminar este alumno?'
+        }
+        impactSummary="Se eliminarán sus calificaciones, pagos y prácticas. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

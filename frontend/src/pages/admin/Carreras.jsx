@@ -4,6 +4,7 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
@@ -14,7 +15,8 @@ export default function AdminCarreras() {
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
   const [selectedCarrera, setSelectedCarrera] = useState(null);
-  const [deleting, setDeleting] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     nombre: '',
     codigo: '',
@@ -86,17 +88,18 @@ export default function AdminCarreras() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta carrera?')) return;
-    setDeleting(id);
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await deleteCarrera(id);
+      await deleteCarrera(deleteTarget.id);
       toast.success('Carrera eliminada exitosamente');
+      setDeleteTarget(null);
       loadCarreras();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Error al eliminar');
     } finally {
-      setDeleting(null);
+      setIsDeleting(false);
     }
   };
 
@@ -162,12 +165,12 @@ export default function AdminCarreras() {
                           <Edit size={16} className="text-blue-600" />
                         </button>
                         <button
-                          onClick={() => handleDelete(carrera.id)}
-                          disabled={deleting === carrera.id}
-                          className="p-2 hover:bg-red-50 rounded-lg transition-colors border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => setDeleteTarget(carrera)}
+                          className="p-2 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                           title="Eliminar"
+                          aria-label={`Eliminar carrera ${carrera.nombre}`}
                         >
-                          <Trash2 size={16} className={deleting === carrera.id ? 'text-gray-400' : 'text-red-600'} />
+                          <Trash2 size={16} className="text-red-600" />
                         </button>
                       </div>
                     </td>
@@ -251,6 +254,23 @@ export default function AdminCarreras() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar carrera"
+        message={deleteTarget ? `¿Eliminar la carrera ${deleteTarget.nombre}?` : '¿Eliminar esta carrera?'}
+        impactSummary={
+          deleteTarget
+            ? `Se eliminarán ${deleteTarget.materiasCount ?? 45} materias, ${deleteTarget.alumnosCount ?? 0} alumnos y todas sus calificaciones/pagos asociados. Esta acción no se puede deshacer.`
+            : 'Se eliminarán materias, alumnos y todas sus calificaciones/pagos asociados. Esta acción no se puede deshacer.'
+        }
+        requireConfirmText="BORRAR"
+        confirmText="Borrar carrera"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

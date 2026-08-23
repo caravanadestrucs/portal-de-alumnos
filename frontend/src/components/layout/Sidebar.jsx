@@ -17,6 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
+  Settings,
+  FileDown,
 } from 'lucide-react';
 
 const adminNavItems = [
@@ -30,7 +32,9 @@ const adminNavItems = [
   { path: '/admin/grupos', icon: FolderCog, label: 'Grupos' },
   { path: '/admin/asignaciones', icon: ClipboardList, label: 'Asignaciones' },
   { path: '/admin/importar', icon: Upload, label: 'Importar' },
+  { path: '/admin/boletas', icon: FileDown, label: 'Boletas' },
   { path: '/admin/admins', icon: UserCheck, label: 'Administradores' },
+  { path: '/admin/configuracion', icon: Settings, label: 'Configuración' },
   { path: '/admin/exportar', icon: Download, label: 'Exportar' },
 ];
 
@@ -48,7 +52,10 @@ const profesorNavItems = [
 
 export default function Sidebar({ isOpen, setIsOpen, collapsed, onToggleCollapse }) {
   const location = useLocation();
-  const { user, logout, isAdmin, isProfesor } = useAuth();
+  const { user, logout } = useAuth();
+  const isAdmin = user?.rol === 'admin';
+  const isAlumno = user?.rol === 'alumno';
+  const isProfesor = user?.rol === 'profesor';
 
   const navItems = isAdmin ? adminNavItems : isProfesor ? profesorNavItems : alumnoNavItems;
   const defaultPath = isAdmin ? '/admin' : isProfesor ? '/profesor' : '/alumno';
@@ -69,14 +76,14 @@ export default function Sidebar({ isOpen, setIsOpen, collapsed, onToggleCollapse
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full glass-dark transition-all duration-300 ${
+        className={`fixed top-0 left-0 z-50 h-full glass-dark transition-all duration-300 flex flex-col ${
           collapsed ? 'w-20' : 'w-64'
         } ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
           <Link to={defaultPath} className="flex items-center gap-2 min-w-0">
             <img src="/logo.png" alt="FV Logo" className="w-10 h-10 shrink-0" />
             <span className={`text-white font-bold text-lg truncate ${
@@ -91,8 +98,8 @@ export default function Sidebar({ isOpen, setIsOpen, collapsed, onToggleCollapse
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="p-4 space-y-2">
+        {/* Navigation — scrollable */}
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -122,8 +129,8 @@ export default function Sidebar({ isOpen, setIsOpen, collapsed, onToggleCollapse
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        {/* User info & logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
+        {/* User info & logout — fixed at bottom */}
+        <div className="shrink-0 p-4 border-t border-white/10">
           <div className={`flex items-center gap-3 mb-3 ${collapsed ? 'justify-center' : ''}`}>
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold shrink-0">
               {user?.nombre?.charAt(0) || 'U'}
