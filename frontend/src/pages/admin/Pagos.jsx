@@ -5,6 +5,7 @@ import { getPagosByAlumno, getAlumnosConPagosPendientes, createPago, togglePagoS
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -293,18 +294,17 @@ export default function AdminPagos() {
               <TableSkeleton rows={5} columns={4} />
             </Card>
           ) : alumnosDeudores.length === 0 ? (
-            <Card className="text-center py-12">
-              <DollarSign size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">No hay alumnos con pagos pendientes</p>
-              <div className="mt-4">
-                <Button onClick={() => {
+            <Card>
+              <EmptyState
+                icon={DollarSign}
+                title="No hay alumnos con pagos pendientes"
+                description="Todos los pagos están al día"
+                actionLabel="Crear primera nota"
+                onAction={() => {
                   const input = searchRef.current?.querySelector('input');
                   if (input) input.focus();
-                }}>
-                  <Plus size={18} />
-                  Crear primera nota
-                </Button>
-              </div>
+                }}
+              />
             </Card>
           ) : (
             <div className="space-y-3">
@@ -384,9 +384,14 @@ export default function AdminPagos() {
               <TableSkeleton rows={5} columns={7} />
             </Card>
           ) : pagos.length === 0 ? (
-            <Card className="text-center py-12">
-              <DollarSign size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">No hay notas de remisión para este alumno</p>
+            <Card>
+              <EmptyState
+                icon={DollarSign}
+                title="No hay notas de remisión para este alumno"
+                description="Creá la primera nota para comenzar"
+                actionLabel="Nueva Nota"
+                onAction={() => setIsModalOpen(true)}
+              />
             </Card>
           ) : (
             <Card>
