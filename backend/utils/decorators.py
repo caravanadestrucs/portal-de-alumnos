@@ -49,6 +49,18 @@ def admin_required(fn):
             
             return fn(*args, **kwargs)
         except Exception as e:
+            # Don't swallow rate limit — let Flask-Limiter return 429
+            if e.__class__.__name__ == "RateLimitExceeded" or "RateLimitExceeded" in str(type(e)):
+                from flask import current_app
+                # Re-raise so limiter's handler can set Retry-After
+                raise e
+            # Also check via import if available
+            try:
+                from flask_limiter.errors import RateLimitExceeded
+                if isinstance(e, RateLimitExceeded):
+                    raise
+            except ImportError:
+                pass
             return jsonify({
                 'error': 'Token inválido o expirado.',
                 'code': 'INVALID_TOKEN'

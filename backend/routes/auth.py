@@ -116,6 +116,13 @@ def login():
     if alumno and alumno.check_password(password):
         if not alumno.activo:
             return jsonify({'error': 'Tu cuenta está desactivada. Contacta al administrador.'}), 403
+        # Enforce 24h temp password expiry
+        try:
+            if getattr(alumno, "must_change_password", False) and getattr(alumno, "temp_password_expires_at", None):
+                if datetime.utcnow() > alumno.temp_password_expires_at:
+                    return jsonify({'error': 'temp_password_expired', 'code': 'TEMP_PASSWORD_EXPIRED'}), 401
+        except Exception:
+            pass
         
         tokens = generate_tokens(alumno.id, 'alumno')
         return jsonify({

@@ -45,20 +45,22 @@ def create_app(config_name=None):
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)
     
     # Inicializar extensiones
-    # TODO: read CORS_ORIGINS from env (e.g. os.getenv("CORS_ORIGINS", "").split(","))
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3050",
+        "http://127.0.0.1:3050",
+        "http://89.116.51.59:3050",
+        "http://89.116.51.59:5050",
+        "http://localhost:5173",
+        "https://alumnos.felipe-villa-nueva-teotitlan.site",
+        "http://alumnos.felipe-villa-nueva-teotitlan.site"
+    ]
+    env_origins = app.config.get("CORS_ORIGINS") or []
+    origins = env_origins if env_origins else default_origins
     CORS(app, 
          supports_credentials=True,
-         origins=[
-             "http://localhost:3000",
-             "http://127.0.0.1:3000",
-             "http://localhost:3050",
-             "http://127.0.0.1:3050",
-             "http://89.116.51.59:3050",
-             "http://89.116.51.59:5050",
-             "http://localhost:5173",  # <-- agregado para Vite
-             "https://alumnos.felipe-villa-nueva-teotitlan.site",
-             "http://alumnos.felipe-villa-nueva-teotitlan.site"
-         ],
+         origins=origins,
          allow_headers=["Content-Type", "Authorization", "Accept"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     )

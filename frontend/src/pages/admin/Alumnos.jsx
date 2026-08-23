@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAlumnos, createAlumno, updateAlumno, deleteAlumno } from '../../api/alumnos';
+import { getAlumnos, createAlumno, updateAlumno, deleteAlumno, sendBulkCredentials } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
 import { useFetch } from '../../hooks/useFetch';
 import Card from '../../components/ui/Card';
@@ -10,9 +10,10 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import ProgressModal from '../../components/ui/ProgressModal';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
-import { Plus, Search, Edit, Trash2, UserPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, UserPlus, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -40,6 +41,12 @@ export default function AdminAlumnos() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  // bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkResults, setBulkResults] = useState(null); // [{id,email,status,error}]
+  const [showProgress, setShowProgress] = useState(false);
   const toast = useToast();
 
   // ── Debounce del search ──────────────────────────────────
@@ -77,8 +84,88 @@ export default function AdminAlumnos() {
     fetchAlumnos();
   }, [fetchAlumnos]);
 
+  // ── Bulk helpers ───────────────────────────────────────
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === alumnos.length && alumnos.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(alumnos.map((a) => a.id)));
+    }
+  };
+  const allSelected = alumnos.length > 0 && selectedIds.size === alumnos.length;
+
+  const handleConfirmBulk = async () => {
+    const ids = Array.from(selectedIds);
+    setBulkSending(true);
+    try {
+      const data = await sendBulkCredentials(ids, true);
+      const results = data.results || [];
+      setBulkResults(results);
+      setShowBulkConfirm(false);
+      setShowProgress(true);
+      const sent = results.filter((r) => r.status === 'sent').length;
+      const failed = results.filter((r) => r.status === 'failed').length;
+      if (failed === 0) toast.success(`Credenciales enviadas a ${sent} alumnos`);
+      else if (sent === 0) toast.error(`Falló envío a ${failed} alumnos`);
+      else toast.success(`Enviados ${sent}, fallidos ${failed}`);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Error al enviar credenciales';
+      toast.error(msg);
+    } finally {
+      setBulkSending(false);
+    }
+  };
+
+  const handleRetryFailed = async (failedIds) => {
+    setBulkSending(true);
+    try {
+      const data = await sendBulkCredentials(failedIds, true);
+      const newResults = data.results || [];
+      // merge: replace failed entries with new status
+      setBulkResults((prev) => {
+        if (!prev) return newResults;
+        const map = new Map(newResults.map((r) => [r.id, r]));
+        return prev.map((r) => (map.has(r.id) ? map.get(r.id) : r));
+      });
+      const sentRetry = newResults.filter((r) => r.status === 'sent').length;
+      toast.success(`Reintento: ${sentRetry} enviados`);
+    } catch (err) {
+      toast.error('Error al reintentar');
+    } finally {
+      setBulkSending(false);
+    }
+  };
+
   // ── Columnas de la tabla ─────────────────────────────────
   const columns = [
+    {
+      key: 'select',
+      header: (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={toggleSelectAll}
+          aria-label="Seleccionar todos"
+        />
+      ),
+      width: '40px',
+      render: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(row.id)}
+          onChange={() => toggleSelect(row.id)}
+          aria-label={`Seleccionar ${row.email}`}
+        />
+      ),
+    },
     {
       key: 'numero_control',
       header: 'No. Control',
@@ -242,10 +329,21 @@ export default function AdminAlumnos() {
             Gestionar alumnos registrados
           </p>
         </div>
-        <Button onClick={openNewModal}>
-          <UserPlus size={18} />
-          Nuevo Alumno
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            disabled={selectedIds.size === 0}
+            title={selectedIds.size === 0 ? 'Select at least one student' : `${selectedIds.size} seleccionados`}
+            onClick={() => setShowBulkConfirm(true)}
+          >
+            <Mail size={16} />
+            Enviar credenciales ({selectedIds.size})
+          </Button>
+          <Button onClick={openNewModal}>
+            <UserPlus size={18} />
+            Nuevo Alumno
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -456,6 +554,29 @@ export default function AdminAlumnos() {
         confirmText="Eliminar"
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Bulk confirm */}
+      <ConfirmDialog
+        isOpen={showBulkConfirm}
+        onClose={() => setShowBulkConfirm(false)}
+        onConfirm={handleConfirmBulk}
+        title="Enviar credenciales"
+        message={
+          selectedIds.size > 0
+            ? `Se enviarán credenciales temporales (expiran en 24h) a ${selectedIds.size} alumnos: ${alumnos.filter((a) => selectedIds.has(a.id)).map((a) => a.email).join(', ')}`
+            : 'Seleccioná al menos un alumno'
+        }
+        confirmText={bulkSending ? 'Enviando...' : `Enviar a ${selectedIds.size}`}
+        variant="primary"
+        isLoading={bulkSending}
+      />
+
+      <ProgressModal
+        isOpen={showProgress}
+        items={bulkResults || []}
+        onClose={() => setShowProgress(false)}
+        onRetryFailed={handleRetryFailed}
       />
     </div>
   );

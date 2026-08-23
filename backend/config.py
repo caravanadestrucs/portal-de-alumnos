@@ -18,6 +18,16 @@ class Config:
         'pool_recycle': 300,
     }
 
+    # Mail / Bulk
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', '587') or 587)
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '') or os.environ.get('MAIL_USER', '')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '') or os.environ.get('MAIL_USERNAME', '')
+    BULK_EMAIL_ENABLED = os.environ.get('BULK_EMAIL_ENABLED', 'true').lower() == 'true'
+    CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()] if os.environ.get('CORS_ORIGINS') else []
+
 
 class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""

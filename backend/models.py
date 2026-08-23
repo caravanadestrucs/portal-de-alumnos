@@ -139,6 +139,11 @@ class Alumno(db.Model):
     fecha_registro = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Temp credentials (bulk email 24h expiry)
+    temp_password_hash = db.Column(db.String(256), nullable=True)
+    temp_password_expires_at = db.Column(db.DateTime, nullable=True)
+    must_change_password = db.Column(db.Boolean, default=False)
+
     # Requisitos de Titulación
     servicio_social = db.Column(db.Boolean, default=False)
     examen_idiomas = db.Column(db.Boolean, default=False)

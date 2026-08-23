@@ -30,3 +30,9 @@ export const getMisDatos = async () => {
   const response = await api.get('/alumnos/mis-datos');
   return response.data;
 };
+
+export const sendBulkCredentials = async (alumno_ids, reset_password = true) => {
+  const ids = alumno_ids;
+  const response = await api.post('/alumnos/send-credentials', { ids, alumno_ids: ids, reset_password });
+  return response.data;
+};
