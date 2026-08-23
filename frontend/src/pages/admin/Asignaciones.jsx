@@ -6,6 +6,7 @@ import { getGrupos } from '../../api/grupos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Select from '../../components/ui/Select';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -194,40 +195,22 @@ export default function AdminAsignaciones() {
       {/* Filters */}
       <Card>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por profesor
-            </label>
-            <select
-              value={filtroProfesor}
-              onChange={(e) => setFiltroProfesor(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todos los profesores</option>
-              {profesores.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.titulo} {p.nombre} {p.apellido_paterno}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por grupo
-            </label>
-            <select
-              value={filtroGrupo}
-              onChange={(e) => setFiltroGrupo(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todos los grupos</option>
-              {grupos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre} - {g.carrera?.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select label="Filtrar por profesor" value={filtroProfesor} onChange={(e) => setFiltroProfesor(e.target.value)}>
+            <option value="">Todos los profesores</option>
+            {profesores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.titulo} {p.nombre} {p.apellido_paterno}
+              </option>
+            ))}
+          </Select>
+          <Select label="Filtrar por grupo" value={filtroGrupo} onChange={(e) => setFiltroGrupo(e.target.value)}>
+            <option value="">Todos los grupos</option>
+            {grupos.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nombre} - {g.carrera?.nombre}
+              </option>
+            ))}
+          </Select>
         </div>
       </Card>
 

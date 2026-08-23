@@ -289,7 +289,10 @@ def get_all_notas():
     Lista todas las notas con filtros (admin)
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except:
+        per_page = 20
     pagada = request.args.get('pagada')
     search = request.args.get('search', '')
     

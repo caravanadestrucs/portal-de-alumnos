@@ -21,23 +21,32 @@ def list_materias():
     """
     carrera_id = request.args.get('carrera_id', type=int)
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = int(request.args.get('per_page', 0))
+        if per_page != 0:
+            per_page = max(1, min(per_page, 100))
+        # 0 = all solo para admin
+    except:
+        per_page = 20
     
     query = Materia.query
     
     if carrera_id:
         query = query.filter(Materia.carrera_id == carrera_id)
     
-    pagination = query.order_by(Materia.nombre).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    query = query.order_by(Materia.nombre)
+    
+    if per_page > 0:
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        items = pagination.items
+        total = pagination.total
+    else:
+        items = query.all()
+        total = len(items)
     
     return jsonify({
-        'materias': [m.to_dict() for m in pagination.items],
-        'total': pagination.total,
-        'page': page,
-        'per_page': per_page,
-        'pages': pagination.pages
+        'materias': [m.to_dict() for m in items],
+        'total': total
     }), 200
 
 

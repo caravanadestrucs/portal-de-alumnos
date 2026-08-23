@@ -10,3 +10,6 @@ flask-limiter
 openpyxl
 gunicorn
 
+pytest
+pytest-cov
+httpx

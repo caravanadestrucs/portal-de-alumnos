@@ -5,6 +5,7 @@ import { getAlumnos } from '../../api/alumnos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Select from '../../components/ui/Select';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -261,23 +262,14 @@ export default function AdminGrupos() {
               className="w-full px-4 py-2.5 rounded-xl input-glass"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por carrera
-            </label>
-            <select
-              value={filtroCarrera}
-              onChange={(e) => setFiltroCarrera(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todas las carreras</option>
-              {carreras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select label="Filtrar por carrera" value={filtroCarrera} onChange={(e) => setFiltroCarrera(e.target.value)}>
+            <option value="">Todas las carreras</option>
+            {carreras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </Select>
         </div>
       </Card>
 

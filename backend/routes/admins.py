@@ -21,7 +21,10 @@ def list_admins():
         - per_page: items por página (default 20)
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except:
+        per_page = 20
     
     pagination = Admin.query.paginate(page=page, per_page=per_page, error_out=False)
     

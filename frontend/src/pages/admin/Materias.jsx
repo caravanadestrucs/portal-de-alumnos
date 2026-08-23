@@ -409,24 +409,14 @@ export default function AdminMaterias() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Carrera *
-            </label>
-            <select
-              required
-              value={formData.carrera_id}
-              onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Seleccionar</option>
-              {carreras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select label="Carrera" value={formData.carrera_id} onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })} required>
+            <option value="">Seleccionar</option>
+            {carreras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </Select>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
