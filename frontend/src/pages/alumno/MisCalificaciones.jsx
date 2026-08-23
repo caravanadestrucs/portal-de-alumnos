@@ -3,13 +3,16 @@ import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { getCalificacionesByAlumno } from '../../api/calificaciones';
-import { BookOpen, TrendingUp } from 'lucide-react';
+import { getMaterias } from '../../api/materias';
+import { BookOpen, TrendingUp, Map } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
+import CurriculumGraph from '../../components/curriculum/CurriculumGraph';
 
 export default function MisCalificaciones() {
   const { user } = useAuth();
   const [calificaciones, setCalificaciones] = useState([]);
+  const [materias, setMaterias] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,8 +23,12 @@ export default function MisCalificaciones() {
       }
       setLoading(true);
       try {
-        const data = await getCalificacionesByAlumno(user.id).catch(() => []);
-        setCalificaciones(data);
+        const [calData, matData] = await Promise.all([
+          getCalificacionesByAlumno(user.id).catch(() => []),
+          getMaterias().catch(() => []),
+        ]);
+        setCalificaciones(calData);
+        setMaterias(Array.isArray(matData) ? matData : []);
       } catch (error) {
         console.error('Error loading calificaciones:', error);
         setCalificaciones([]);
@@ -58,6 +65,29 @@ export default function MisCalificaciones() {
     ? (filtered.reduce((s, c) => s + Number(getEffectiveGrade(c).value), 0) / filtered.length).toFixed(2)
     : "-";
 
+  // Build graph data: merge materias + calificaciones → estado coloreado
+  const graphMaterias = (() => {
+    if (!materias.length) return [];
+    // index calificaciones by materia id
+    const calByMateria = new Map();
+    for (const cal of calificaciones) {
+      const mid = cal.materia?.id ?? cal.materia_id ?? cal.id;
+      if (mid != null) calByMateria.set(Number(mid), cal);
+    }
+    return materias.map((m) => {
+      const cal = calByMateria.get(Number(m.id));
+      if (!cal) return { ...m, estado: 'pendiente' };
+      const eff = getEffectiveGrade(cal);
+      if (eff.value == null || eff.value === '' || Number(eff.value) === 0 || isNaN(Number(eff.value))) {
+        // has cal record but no grade → cursando/regular
+        return { ...m, estado: 'cursando', nota: eff.value };
+      }
+      const num = Number(eff.value);
+      if (num >= 8) return { ...m, estado: 'aprobado', nota: eff.value };
+      return { ...m, estado: 'reprobado', nota: eff.value };
+    });
+  })();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -90,6 +120,18 @@ export default function MisCalificaciones() {
           </p>
         </Card>
       </div>
+
+      {/* Curriculum Graph — avance coloreado */}
+      {graphMaterias.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Map size={20} className="text-primary-600" />
+            <h2 className="text-xl font-bold text-gray-800">Mapa Curricular</h2>
+            <span className="text-xs text-gray-400 ml-2">{graphMaterias.length} materias · 9 cuatrimestres</span>
+          </div>
+          <CurriculumGraph materias={graphMaterias} onMateriaClick={() => {}} />
+        </Card>
+      )}
 
       {/* Calificaciones Table */}
       <Card>

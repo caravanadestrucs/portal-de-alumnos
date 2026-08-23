@@ -5,9 +5,11 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
+import { Plus, Edit, Trash2, GraduationCap, Map } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
+import { getMaterias } from '../../api/materias';
+import CurriculumGraph from '../../components/curriculum/CurriculumGraph';
 
 export default function AdminCarreras() {
   const [carreras, setCarreras] = useState([]);
@@ -25,10 +27,25 @@ export default function AdminCarreras() {
   });
   const [saving, setSaving] = useState(false);
   const toast = useToast();
+  const [materias, setMaterias] = useState([]);
+  const [loadingMaterias, setLoadingMaterias] = useState(false);
 
   useEffect(() => {
     loadCarreras();
+    loadMaterias();
   }, []);
+
+  const loadMaterias = async () => {
+    setLoadingMaterias(true);
+    try {
+      const data = await getMaterias().catch(() => []);
+      setMaterias(Array.isArray(data) ? data : []);
+    } catch {
+      setMaterias([]);
+    } finally {
+      setLoadingMaterias(false);
+    }
+  };
 
   const loadCarreras = async () => {
     setLoading(true);
@@ -179,6 +196,24 @@ export default function AdminCarreras() {
               </tbody>
             </table>
           </div>
+        )}
+      </Card>
+
+      {/* Curriculum Graph — admin ve 45 nodos */}
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Map size={20} className="text-primary-600" />
+          <h2 className="text-xl font-bold text-gray-800">Mapa Curricular</h2>
+          <span className="text-xs text-gray-400 ml-2">
+            {loadingMaterias ? 'cargando…' : `${materias.length} materias · 9 cuatrimestres`}
+          </span>
+        </div>
+        {loadingMaterias ? (
+          <TableSkeleton rows={3} columns={9} />
+        ) : materias.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">No hay materias para mostrar</p>
+        ) : (
+          <CurriculumGraph materias={materias} onMateriaClick={() => {}} />
         )}
       </Card>
 
