@@ -54,7 +54,9 @@ def create_app(config_name=None):
         "http://89.116.51.59:5050",
         "http://localhost:5173",
         "https://alumnos.felipe-villa-nueva-teotitlan.site",
-        "http://alumnos.felipe-villa-nueva-teotitlan.site"
+        "http://alumnos.felipe-villa-nueva-teotitlan.site",
+        "https://extras.felipe-villa-nueva-teotitlan.site",
+        "http://extras.felipe-villa-nueva-teotitlan.site",
     ]
     env_origins = app.config.get("CORS_ORIGINS") or []
     origins = env_origins if env_origins else default_origins
