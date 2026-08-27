@@ -73,7 +73,7 @@ def create_materia():
         return jsonify({'error': 'La carrera es requerida'}), 400
     
     # Verificar que la carrera exista
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'La carrera especificada no existe'}), 404
     
@@ -181,7 +181,7 @@ def update_materia(id):
         if 'creditos' in data:
             materia.creditos = data['creditos']
         if 'carrera_id' in data:
-            new_carrera = Carrera.query.get(data['carrera_id'])
+            new_carrera = db.session.get(Carrera, data['carrera_id'])
             if not new_carrera:
                 return jsonify({'error': 'La carrera especificada no existe'}), 404
             materia.carrera_id = data['carrera_id']

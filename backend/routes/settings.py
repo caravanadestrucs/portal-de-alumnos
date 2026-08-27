@@ -139,16 +139,22 @@ def update_config():
 def test_email():
     """
     POST /api/config/test
-    Envía un email de prueba al administrador autenticado
-    usando la configuración SMTP actual.
+    Envía un email de prueba usando la configuración SMTP actual.
+    Si se envía `to_email` en el body, se envía a ese destinatario.
+    Si no, se envía al email del administrador autenticado.
     """
-    # Obtener email del admin desde JWT
+    # Obtener email del admin como fallback
     claims = get_jwt()
     from models import Admin
-    admin = Admin.query.get(claims.get('id'))
+    admin = db.session.get(Admin, claims.get('id'))
     
-    if not admin or not admin.email:
-        return jsonify({'error': 'Administrador no encontrado o sin email'}), 400
+    # Usar to_email del body si se provee, sino el del admin
+    body = request.get_json(silent=True) or {}
+    to_email = (body.get('to_email') or '').strip().lower()
+    if not to_email:
+        if not admin or not admin.email:
+            return jsonify({'error': 'Administrador no encontrado o sin email'}), 400
+        to_email = admin.email
     
     # Verificar que SMTP esté configurado
     cfg = {c.key: c.value for c in Config.query.all()}
@@ -173,7 +179,7 @@ def test_email():
 </html>"""
     
     result = send_email(
-        to_email=admin.email,
+        to_email=to_email,
         subject=f"Prueba SMTP - {cfg.get('app_name', 'Portal de Calificaciones')}",
         html_body=html
     )

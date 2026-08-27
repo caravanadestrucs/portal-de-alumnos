@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -30,22 +30,28 @@ describe('ConfirmDialog', () => {
     render(<ConfirmDialog isOpen requireConfirmText="BORRAR" onClose={vi.fn()} onConfirm={vi.fn()} />);
     const confirmBtn = screen.getByRole('button', { name: 'Confirmar' });
     expect(confirmBtn).toBeDisabled();
-    await user.type(screen.getByPlaceholderText('BORRAR'), 'BORRAR');
-    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeEnabled();
+    await act(async () => {
+      await user.type(screen.getByPlaceholderText('BORRAR'), 'BORRAR');
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar' })).toBeEnabled());
   });
 
   it('mantiene disabled si el texto no coincide exactamente', async () => {
     const user = userEvent.setup();
     render(<ConfirmDialog isOpen requireConfirmText="BORRAR" onClose={vi.fn()} onConfirm={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('BORRAR'), 'borrar');
-    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled();
+    await act(async () => {
+      await user.type(screen.getByPlaceholderText('BORRAR'), 'borrar');
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar' })).toBeDisabled());
   });
 
   it('llama onConfirm al click', async () => {
     const user = userEvent.setup();
     const fn = vi.fn();
     render(<ConfirmDialog isOpen onConfirm={fn} onClose={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: /Confirmar/i }));
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /Confirmar/i }));
+    });
     expect(fn).toHaveBeenCalledOnce();
   });
 
@@ -53,7 +59,9 @@ describe('ConfirmDialog', () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<ConfirmDialog isOpen onClose={onClose} onConfirm={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    });
     expect(onClose).toHaveBeenCalledOnce();
   });
 });

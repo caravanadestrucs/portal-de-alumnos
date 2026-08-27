@@ -100,7 +100,7 @@ def get_admin(admin_id):
     """
     Obtiene un administrador por ID
     """
-    admin = Admin.query.get(admin_id)
+    admin = db.session.get(Admin, admin_id)
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     
@@ -114,7 +114,7 @@ def update_admin(admin_id):
     Actualiza un administrador
     Body: { username?, email?, nombre? }
     """
-    admin = Admin.query.get(admin_id)
+    admin = db.session.get(Admin, admin_id)
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     
@@ -167,7 +167,7 @@ def delete_admin(admin_id):
     if admin_id == current_admin_id:
         return jsonify({'error': 'No puedes eliminar tu propia cuenta'}), 403
     
-    admin = Admin.query.get(admin_id)
+    admin = db.session.get(Admin, admin_id)
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     
@@ -205,7 +205,7 @@ def change_admin_password(admin_id):
         # El usuario actual es admin (por el decorador), así que puede cambiar cualquiera
         pass
     
-    admin = Admin.query.get(admin_id)
+    admin = db.session.get(Admin, admin_id)
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     

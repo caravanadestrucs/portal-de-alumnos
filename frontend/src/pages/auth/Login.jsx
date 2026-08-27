@@ -119,15 +119,6 @@ export default function Login() {
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
-
-          <div className="mt-4 text-center">
-            <Link
-              to="/signup"
-              className="text-sm text-primary-600 hover:text-primary-700 hover:underline"
-            >
-              ¿No tienes cuenta? Regístrate aquí
-            </Link>
-          </div>
         </div>
       </div>
     </div>

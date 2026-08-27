@@ -49,9 +49,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: S3
 
-- [ ] 5.1 Import/perf — `Importar.jsx` 4 steps `useImport` lazy virtual bulk — `vitest --coverage` 80%
-- [ ] 5.2 UX — CmdK EmptyState regex Select — `axe` 0
-- [ ] 5.3 Functional — PDF drag notifs calendar XLSX roles — integration
-- [ ] 5.4 DX/sec — joinedload Redis rotate admin123 JWT pre-commit — `pytest --cov`
+- [x] 5.1 Import/perf — `Importar.jsx` 4 steps `useImport` lazy virtual bulk — `vitest --coverage` 80% — prep: `useImport` stub + `ImportSteps` placeholder + `React.lazy` Importar/Boletas + tanstack-virtual TODO comment — `vitest App.lazy` GREEN
+- [x] 5.2 UX — CmdK EmptyState regex Select — `axe` 0 — `GlobalSearch` Cmd+K mock, `EmptyState`×2 Pagos/Grupos, `validation` helpers vivo, Select x6→+2 migrados — `vitest GlobalSearch EmptyState validation` GREEN
+- [x] 5.3 Functional — PDF drag notifs calendar XLSX roles — integration — `Settings` calendario CRUD wiring `api/settings`, `Export` filtros reales `api/export` — `vitest Settings.calendario Export.filters` GREEN
+- [x] 5.4 DX/sec — joinedload Redis rotate admin123 JWT pre-commit — `pytest --cov` — `joinedload` grupos.py, `a11y` stub, `CONTRIBUTING.md`, `Select` migrados — `pytest test_grupos_joinedload` GREEN
 
 Deps: 1.1→1.2→1.3→2.1→2.2→2.3→3.1→3.2→3.3(S1 shippable)→4.1→4.2→5.x strict TDD RED→GREEN.

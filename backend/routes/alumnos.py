@@ -109,7 +109,7 @@ def create_alumno():
         return jsonify({'error': 'El email ya existe'}), 409
     
     # Verificar que la carrera exista
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'La carrera especificada no existe'}), 404
     
@@ -213,7 +213,7 @@ def update_alumno(id):
         if 'carrera_id' in data:
             nueva_carrera_id = int(data['carrera_id'])
             if nueva_carrera_id != alumno.carrera_id:
-                carrera = Carrera.query.get(nueva_carrera_id)
+                carrera = db.session.get(Carrera, nueva_carrera_id)
                 if not carrera:
                     return jsonify({'error': 'La carrera especificada no existe'}), 404
                 alumno.carrera_id = nueva_carrera_id
@@ -361,7 +361,7 @@ def send_credentials():
     fallidos = 0
 
     for alumno_id in ids:
-        alumno = Alumno.query.get(alumno_id)
+        alumno = db.session.get(Alumno, alumno_id)
         if not alumno:
             results.append({"id": alumno_id, "status": "failed", "error": "Alumno not found", "email": None})
             fallidos += 1

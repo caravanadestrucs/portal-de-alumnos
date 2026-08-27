@@ -3,7 +3,8 @@ Rutas de autenticación: login, logout, register, me, forgot-password, reset-pas
 """
 import os
 import time
-from flask import Blueprint, request, jsonify
+import secrets
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
     jwt_required, get_jwt
@@ -142,24 +143,41 @@ def login():
 
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per hour")
 def register():
     """
-    Registro de nuevo alumno (usado desde /signup del frontend)
+    Registro de nuevo alumno via link oculto /r/a/:token
     Body: {
         numero_control, nombre, apellido_paterno, apellido_materno,
-        email, password, carrera_id
+        email, password, carrera_id, invite_token
     }
+    invite_token must match ALUMNO_INVITE_TOKEN else 404 (no reveal).
     """
     data = request.get_json()
     
     if not data:
         return jsonify({'error': 'Datos requeridos'}), 400
+
+    # Validate hidden invite token — 404 to not reveal existence
+    invite_token = data.get('invite_token') or data.get('inviteToken')
+    expected = current_app.config.get('ALUMNO_INVITE_TOKEN') or os.environ.get('ALUMNO_INVITE_TOKEN', 'ca2d949f-5cd2-4785-918e-205d6566f4e7')
+    if not invite_token or invite_token != expected:
+        return jsonify({'error': 'No encontrado'}), 404
     
     # Validaciones
     required_fields = ['numero_control', 'nombre', 'apellido_paterno', 'email', 'password', 'carrera_id']
     for field in required_fields:
         if not data.get(field):
             return jsonify({'error': f'El campo {field} es requerido'}), 400
+
+    # Verify carrera exists
+    try:
+        carrera_id = int(data['carrera_id'])
+    except (ValueError, TypeError):
+        return jsonify({'error': 'carrera_id inválido'}), 400
+    carrera = db.session.get(Carrera, carrera_id)
+    if not carrera:
+        return jsonify({'error': 'La carrera especificada no existe'}), 404
     
     # Validar formato número de control
     if not validate_numero_control(data['numero_control']):
@@ -185,7 +203,7 @@ def register():
             apellido_paterno=data['apellido_paterno'].strip(),
             apellido_materno=data.get('apellido_materno', '').strip() or None,
             email=data['email'].lower().strip(),
-            carrera_id=data['carrera_id'],
+            carrera_id=carrera_id,
             activo=True,
             fecha_registro=datetime.utcnow().date()
         )
@@ -195,7 +213,7 @@ def register():
         db.session.flush()  # Obtener ID del alumno
         
         # Crear boletas para todas las materias de su carrera
-        materias = Materia.query.filter_by(carrera_id=data['carrera_id']).all()
+        materias = Materia.query.filter_by(carrera_id=carrera_id).all()
         periodo_actual = f"Enero-Abril {datetime.now().year}"
         for materia in materias:
             calif = Calificacion(
@@ -228,6 +246,94 @@ def register():
         return jsonify({'error': f'Error al crear usuario: {str(e)}'}), 500
 
 
+@auth_bp.route('/register/profesor', methods=['POST'])
+@limiter.limit("5 per hour")
+def register_profesor():
+    """
+    Registro de nuevo profesor via link oculto /r/p/:token
+    Body: { nombre, apellido (or apellido_paterno), email, password, invite_token, [numero_empleado, apellido_materno, titulo] }
+    invite_token must match PROFESOR_INVITE_TOKEN else 404.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+
+    invite_token = data.get('invite_token') or data.get('inviteToken')
+    expected = current_app.config.get('PROFESOR_INVITE_TOKEN') or os.environ.get('PROFESOR_INVITE_TOKEN', 'ef4a3a25-0214-4581-97dc-5104bb06c748')
+    if not invite_token or invite_token != expected:
+        return jsonify({'error': 'No encontrado'}), 404
+
+    # Normalize apellido fields
+    apellido_paterno = (data.get('apellido_paterno') or data.get('apellido') or '').strip()
+    required_fields = ['nombre', 'email', 'password']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'error': f'El campo {field} es requerido'}), 400
+    if not apellido_paterno:
+        return jsonify({'error': 'El campo apellido es requerido'}), 400
+
+    if not validate_email(data['email']):
+        return jsonify({'error': 'Formato de email inválido'}), 400
+
+    email_lower = data['email'].lower().strip()
+
+    # Check duplicates in Profesor and Alumno (and Admin for safety)
+    if Profesor.query.filter_by(email=email_lower).first():
+        return jsonify({'error': 'El email ya está registrado'}), 409
+    if Alumno.query.filter_by(email=email_lower).first():
+        return jsonify({'error': 'El email ya está registrado'}), 409
+
+    # numero_empleado: use provided or generate unique
+    numero_empleado = (data.get('numero_empleado') or '').strip()
+    if not numero_empleado:
+        # Generate unique PROF- + 8 hex
+        for _ in range(5):
+            candidate = f"PROF-{secrets.token_hex(4).upper()}"
+            if not Profesor.query.filter_by(numero_empleado=candidate).first():
+                numero_empleado = candidate
+                break
+        if not numero_empleado:
+            numero_empleado = f"PROF-{int(time.time())}"
+    else:
+        if Profesor.query.filter_by(numero_empleado=numero_empleado).first():
+            return jsonify({'error': 'El número de empleado ya está registrado'}), 409
+
+    if len(data['password']) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+
+    try:
+        profesor = Profesor(
+            numero_empleado=numero_empleado,
+            nombre=data['nombre'].strip(),
+            apellido_paterno=apellido_paterno,
+            apellido_materno=(data.get('apellido_materno') or '').strip() or None,
+            titulo=(data.get('titulo') or '').strip() or None,
+            email=email_lower,
+            activo=True,
+        )
+        profesor.set_password(data['password'])
+        db.session.add(profesor)
+        db.session.commit()
+
+        tokens = generate_tokens(profesor.id, 'profesor')
+
+        return jsonify({
+            'message': 'Registro exitoso',
+            'user': {
+                'type': 'profesor',
+                'id': profesor.id,
+                'numero_empleado': profesor.numero_empleado,
+                'nombre': f"{profesor.nombre} {profesor.apellido_paterno}",
+                'email': profesor.email,
+            },
+            **tokens
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error al crear profesor: {str(e)}'}), 500
+
+
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
@@ -250,7 +356,7 @@ def get_current_user():
     user_id = claims.get('id')
     
     if user_type == 'admin':
-        admin = Admin.query.get(user_id)
+        admin = db.session.get(Admin, user_id)
         if not admin:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         return jsonify({
@@ -259,7 +365,7 @@ def get_current_user():
         }), 200
     
     elif user_type == 'alumno':
-        alumno = Alumno.query.get(user_id)
+        alumno = db.session.get(Alumno, user_id)
         if not alumno:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         return jsonify({
@@ -312,17 +418,17 @@ def change_password():
     
     try:
         if user_type == 'admin':
-            user = Admin.query.get(user_id)
+            user = db.session.get(Admin, user_id)
             if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         elif user_type == 'profesor':
-            user = Profesor.query.get(user_id)
+            user = db.session.get(Profesor, user_id)
             if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         else:
-            user = Alumno.query.get(user_id)
+            user = db.session.get(Alumno, user_id)
             if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)

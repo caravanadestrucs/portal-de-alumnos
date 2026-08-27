@@ -28,6 +28,10 @@ class Config:
     BULK_EMAIL_ENABLED = os.environ.get('BULK_EMAIL_ENABLED', 'true').lower() == 'true'
     CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()] if os.environ.get('CORS_ORIGINS') else []
 
+    # Hidden invite tokens for registration (no public signup)
+    ALUMNO_INVITE_TOKEN = os.environ.get('ALUMNO_INVITE_TOKEN', 'ca2d949f-5cd2-4785-918e-205d6566f4e7')
+    PROFESOR_INVITE_TOKEN = os.environ.get('PROFESOR_INVITE_TOKEN', 'ef4a3a25-0214-4581-97dc-5104bb06c748')
+
 
 class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""

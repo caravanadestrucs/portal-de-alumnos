@@ -19,12 +19,12 @@ def get_current_user():
     if claims.get('type') == 'admin':
         return {
             'type': 'admin',
-            'data': Admin.query.get(claims['id'])
+            'data': db.session.get(Admin, claims['id'])
         }
     elif claims.get('type') == 'alumno':
         return {
             'type': 'alumno',
-            'data': Alumno.query.get(claims['id'])
+            'data': db.session.get(Alumno, claims['id'])
         }
     
     return None
@@ -138,7 +138,7 @@ def get_admin_or_403():
             'code': 'ADMIN_REQUIRED'
         }), 403
     
-    admin = Admin.query.get(claims['id'])
+    admin = db.session.get(Admin, claims['id'])
     if not admin:
         return None, jsonify({
             'error': 'Administrador no encontrado.',
@@ -163,7 +163,7 @@ def get_alumno_or_403():
             'code': 'ALUMNO_REQUIRED'
         }), 403
     
-    alumno = Alumno.query.get(claims['id'])
+    alumno = db.session.get(Alumno, claims['id'])
     if not alumno:
         return None, jsonify({
             'error': 'Alumno no encontrado.',

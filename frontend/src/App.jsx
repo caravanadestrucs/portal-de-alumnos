@@ -100,11 +100,21 @@ function App() {
                 </PublicRoute>
               }
             />
+            {/* Hidden invite-only registration — no public signup. Disallow: /r/ in robots.txt */}
+            {/* meta noindex,nofollow is injected by Register component via useEffect for /r/* routes */}
             <Route
-              path="/signup"
+              path="/r/a/:token"
               element={
                 <PublicRoute>
-                  <Register />
+                  <Register role="alumno" />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/r/p/:token"
+              element={
+                <PublicRoute>
+                  <Register role="profesor" />
                 </PublicRoute>
               }
             />

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CurriculumGraph from './CurriculumGraph';
 
@@ -74,7 +74,11 @@ describe('CurriculumGraph', () => {
     render(<CurriculumGraph materias={materias} onMateriaClick={onMateriaClick} />);
     // busca nodo Física I
     const fisicaNode = screen.getByText(/Física I/i).closest('[data-testid*="materia-node"]') || screen.getByText(/Física I/i);
-    await user.click(fisicaNode);
+    await act(async () => {
+      await user.click(fisicaNode);
+    });
+    // esperar flush de setSelected (modal) para evitar warning act()
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     // debe llamar onMateriaClick con materia
     expect(onMateriaClick).toHaveBeenCalled();
     const calledArg = onMateriaClick.mock.calls[0][0];

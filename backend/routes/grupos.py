@@ -83,7 +83,7 @@ def create_grupo():
             return jsonify({'error': f'El campo {field} es requerido'}), 400
     
     # Verificar carrera existe
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'Carrera no encontrada'}), 404
     
@@ -205,7 +205,7 @@ def add_integrante(grupo_id):
         return jsonify({'error': 'alumno_id es requerido'}), 400
     
     # Verificar alumno existe
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'Alumno no encontrado'}), 404
     

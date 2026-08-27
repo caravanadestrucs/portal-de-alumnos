@@ -69,12 +69,12 @@ def create_or_update_calificacion():
             return jsonify({'error': f'El campo {field} es requerido'}), 400
     
     # Verificar que el alumno exista
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
     
     # Verificar que la materia exista
-    materia = Materia.query.get(data['materia_id'])
+    materia = db.session.get(Materia, data['materia_id'])
     if not materia:
         return jsonify({'error': 'La materia no existe'}), 404
     
@@ -281,8 +281,8 @@ def bulk_create_calificaciones():
                 continue
             
             # Verificar existencia
-            alumno = Alumno.query.get(cal_data['alumno_id'])
-            materia = Materia.query.get(cal_data['materia_id'])
+            alumno = db.session.get(Alumno, cal_data['alumno_id'])
+            materia = db.session.get(Materia, cal_data['materia_id'])
             
             if not alumno or not materia:
                 errors.append(f"Fila {i}: Alumno o materia no encontrada")

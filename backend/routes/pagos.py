@@ -72,7 +72,7 @@ def create_nota():
         return jsonify({'error': 'El monto es requerido'}), 400
     
     # Verificar que el alumno exista
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
     

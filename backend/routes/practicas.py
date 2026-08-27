@@ -46,7 +46,7 @@ def create():
         return jsonify({'error': 'alumno_id y numero_practica son requeridos'}), 400
     
     # Verificar que existe el alumno
-    alumno = Alumno.query.get(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
     

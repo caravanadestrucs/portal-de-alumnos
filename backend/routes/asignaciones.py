@@ -86,17 +86,17 @@ def create_asignacion():
             return jsonify({'error': f'El campo {field} es requerido'}), 400
     
     # Verificar que existe el profesor
-    profesor = Profesor.query.get(data['profesor_id'])
+    profesor = db.session.get(Profesor, data['profesor_id'])
     if not profesor:
         return jsonify({'error': 'Profesor no encontrado'}), 404
     
     # Verificar que existe la materia
-    materia = Materia.query.get(data['materia_id'])
+    materia = db.session.get(Materia, data['materia_id'])
     if not materia:
         return jsonify({'error': 'Materia no encontrada'}), 404
     
     # Verificar que existe el grupo
-    grupo = Grupo.query.get(data['grupo_id'])
+    grupo = db.session.get(Grupo, data['grupo_id'])
     if not grupo:
         return jsonify({'error': 'Grupo no encontrado'}), 404
     
@@ -158,19 +158,19 @@ def update_asignacion(asignacion_id):
         return jsonify({'error': 'Datos requeridos'}), 400
     
     if 'profesor_id' in data:
-        profesor = Profesor.query.get(data['profesor_id'])
+        profesor = db.session.get(Profesor, data['profesor_id'])
         if not profesor:
             return jsonify({'error': 'Profesor no encontrado'}), 404
         asignacion.profesor_id = data['profesor_id']
     
     if 'materia_id' in data:
-        materia = Materia.query.get(data['materia_id'])
+        materia = db.session.get(Materia, data['materia_id'])
         if not materia:
             return jsonify({'error': 'Materia no encontrada'}), 404
         asignacion.materia_id = data['materia_id']
     
     if 'grupo_id' in data:
-        grupo = Grupo.query.get(data['grupo_id'])
+        grupo = db.session.get(Grupo, data['grupo_id'])
         if not grupo:
             return jsonify({'error': 'Grupo no encontrado'}), 404
         asignacion.grupo_id = data['grupo_id']
