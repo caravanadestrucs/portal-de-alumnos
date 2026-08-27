@@ -6,7 +6,9 @@ export default defineConfig({
   server: {
     allowedHosts: [
       'alumnos.felipe-villa-nueva-teotitlan.site',
+      'aulas.felipe-villa-nueva-teotitlan.site',
       'extras.felipe-villa-nueva-teotitlan.site',
+      '.felipe-villa-nueva-teotitlan.site',
     ],
   },
   test: {

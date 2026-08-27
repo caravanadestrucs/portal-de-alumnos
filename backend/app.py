@@ -55,6 +55,8 @@ def create_app(config_name=None):
         "http://localhost:5173",
         "https://alumnos.felipe-villa-nueva-teotitlan.site",
         "http://alumnos.felipe-villa-nueva-teotitlan.site",
+        "https://aulas.felipe-villa-nueva-teotitlan.site",
+        "http://aulas.felipe-villa-nueva-teotitlan.site",
         "https://extras.felipe-villa-nueva-teotitlan.site",
         "http://extras.felipe-villa-nueva-teotitlan.site",
     ]
