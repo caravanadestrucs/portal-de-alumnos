@@ -10,6 +10,14 @@ export default defineConfig({
       'extras.felipe-villa-nueva-teotitlan.site',
       '.felipe-villa-nueva-teotitlan.site',
     ],
+    host: '0.0.0.0',
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://backend:5000',
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     environment: 'jsdom',
