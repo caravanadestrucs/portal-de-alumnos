@@ -4,12 +4,16 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
+    allowedHosts: [
+      'alumnos.felipe-villa-nueva-teotitlan.site',
+      'extras.felipe-villa-nueva-teotitlan.site',
+    ],
   },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    globals: true,
+    css: true,
+    exclude: ['**/node_modules/**', '**/e2e/**', '**/dist/**']
+  }
 });

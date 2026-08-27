@@ -9,6 +9,30 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
+# ============================================================
+# MODELO DE CONFIGURACION (Key-Value)
+# ============================================================
+class Config(db.Model):
+    """Modelo key-value para configuración del sistema (SMTP, personalización, etc.)"""
+    __tablename__ = 'config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+# ============================================================
+# MODELO DE ADMIN
+# ============================================================
 class Admin(db.Model):
     """Modelo de Administrador"""
     __tablename__ = 'admins'
@@ -115,6 +139,11 @@ class Alumno(db.Model):
     fecha_registro = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Temp credentials (bulk email 24h expiry)
+    temp_password_hash = db.Column(db.String(256), nullable=True)
+    temp_password_expires_at = db.Column(db.DateTime, nullable=True)
+    must_change_password = db.Column(db.Boolean, default=False)
+
     # Requisitos de Titulación
     servicio_social = db.Column(db.Boolean, default=False)
     examen_idiomas = db.Column(db.Boolean, default=False)
@@ -200,15 +229,15 @@ class Calificacion(db.Model):
     asistencia_4 = db.Column(db.Integer, default=0)
     asistencia_5 = db.Column(db.Integer, default=0)
     
-    # Prácticas (0-20)
+    # Prácticas (0-10)
     practica_1 = db.Column(db.Float, default=0)
     practica_2 = db.Column(db.Float, default=0)
-    
+
     # Extra (recuperación, ordinario, etc.)
     extra_1 = db.Column(db.Float, default=0)
     extra_2 = db.Column(db.Float, default=0)
-    
-    # Calificación final (0-20)
+
+    # Calificación final (0-10)
     calificacion_final = db.Column(db.Float, default=0)
     
     periodo = db.Column(db.String(20))  # ej: "Enero-Abril 2026"
@@ -245,6 +274,11 @@ class Calificacion(db.Model):
             'alumno_id': self.alumno_id,
             'materia_id': self.materia_id,
             'materia': self.materia.to_dict() if self.materia else None,
+            'asistencia_1': self.asistencia_1,
+            'asistencia_2': self.asistencia_2,
+            'asistencia_3': self.asistencia_3,
+            'asistencia_4': self.asistencia_4,
+            'asistencia_5': self.asistencia_5,
             'asistencia': {
                 '1': self.asistencia_1,
                 '2': self.asistencia_2,
@@ -515,22 +549,4 @@ class Asignacion(db.Model):
         }
 
 
-def init_db(app):
-    """Inicializa la base de datos con la aplicación"""
-    db.init_app(app)
-    
-    with app.app_context():
-        # Crear tablas
-        db.create_all()
-        
-        # Crear admin por defecto si no existe
-        if not Admin.query.first():
-            admin = Admin(
-                username='admin',
-                email='admin@universidadfv.edu.mx',
-                nombre='Administrador Principal'
-            )
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            print('✅ Admin por defecto creado: admin@universidadfv.edu.mx / admin123')
+

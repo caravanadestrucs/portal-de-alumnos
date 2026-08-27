@@ -2,7 +2,7 @@
 Rutas para gestión de Calificaciones
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Calificacion, Alumno, Materia
 from utils.decorators import admin_required
@@ -11,17 +11,16 @@ calificaciones_bp = Blueprint('calificaciones', __name__)
 
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_alumno_calificaciones(alumno_id):
     """
     Obtiene todas las calificaciones de un alumno
     """
-    # Por ahora permitir sin JWT para debug
-    # identity = get_jwt_identity()
+    claims = get_jwt()
     
-    # # Verificar permisos: solo el admin o el propio alumno
-    # if identity.get('type') == 'alumno' and identity['id'] != alumno_id:
-    #     return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
+    # Verificar permisos: solo el admin o el propio alumno
+    if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
+        return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
     
@@ -70,12 +69,12 @@ def create_or_update_calificacion():
             return jsonify({'error': f'El campo {field} es requerido'}), 400
     
     # Verificar que el alumno exista
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
     
     # Verificar que la materia exista
-    materia = Materia.query.get(data['materia_id'])
+    materia = db.session.get(Materia, data['materia_id'])
     if not materia:
         return jsonify({'error': 'La materia no existe'}), 404
     
@@ -152,10 +151,10 @@ def get_historial(alumno_id):
     Obtiene el historial completo del alumno (para el portal)
     Incluye calificaciones, promedio general, etc.
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
     # Verificar permisos
-    if identity.get('type') == 'alumno' and identity['id'] != alumno_id:
+    if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver este historial'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
@@ -166,8 +165,8 @@ def get_historial(alumno_id):
     
     # Calcular estadísticas
     total_calificaciones = len(calificaciones)
-    materias_aprobadas = sum(1 for c in calificaciones if c.calificacion_final >= 13)
-    materias_reprobadas = sum(1 for c in calificaciones if c.calificacion_final > 0 and c.calificacion_final < 13)
+    materias_aprobadas = sum(1 for c in calificaciones if c.calificacion_final >= 8)
+    materias_reprobadas = sum(1 for c in calificaciones if c.calificacion_final > 0 and c.calificacion_final < 8)
     
     promedios = [c.calificacion_final for c in calificaciones if c.calificacion_final > 0]
     promedio_general = round(sum(promedios) / len(promedios), 1) if promedios else 0
@@ -205,8 +204,8 @@ def get_calificacion(id):
     """
     calificacion = Calificacion.query.get_or_404(id)
     
-    identity = get_jwt_identity()
-    if identity.get('type') == 'alumno' and identity['id'] != calificacion.alumno_id:
+    claims = get_jwt()
+    if claims.get('type') == 'alumno' and claims['id'] != calificacion.alumno_id:
         return jsonify({'error': 'No tienes permiso para ver esta calificación'}), 403
     
     return jsonify({'calificacion': calificacion.to_dict()}), 200
@@ -232,6 +231,7 @@ def delete_calificacion(id):
 
 
 @calificaciones_bp.route('/periodos', methods=['GET'])
+@jwt_required()
 def get_periodos():
     """
     Obtiene todos los periodos/años únicos en las calificaciones
@@ -239,9 +239,9 @@ def get_periodos():
     from sqlalchemy import func, distinct
     
     resultados = db.session.query(
-        distinct(Calificacion.periodo),
-        distinct(Calificacion.anio)
-    ).order_by(Calificacion.anio.desc()).all()
+        Calificacion.periodo,
+        Calificacion.anio
+    ).distinct().order_by(Calificacion.anio.desc()).all()
     
     periodos = []
     seen = set()
@@ -281,8 +281,8 @@ def bulk_create_calificaciones():
                 continue
             
             # Verificar existencia
-            alumno = Alumno.query.get(cal_data['alumno_id'])
-            materia = Materia.query.get(cal_data['materia_id'])
+            alumno = db.session.get(Alumno, cal_data['alumno_id'])
+            materia = db.session.get(Materia, cal_data['materia_id'])
             
             if not alumno or not materia:
                 errors.append(f"Fila {i}: Alumno o materia no encontrada")

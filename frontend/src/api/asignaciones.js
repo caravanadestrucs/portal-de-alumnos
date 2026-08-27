@@ -1,7 +1,7 @@
 import api from './index';
 
 export const getAsignaciones = async (params = {}) => {
-  const response = await api.get('/asignaciones', { params });
+  const response = await api.get(`/asignaciones`, { params });
   return response.data.asignaciones || [];
 };
 
@@ -11,7 +11,7 @@ export const getAsignacion = async (id) => {
 };
 
 export const createAsignacion = async (data) => {
-  const response = await api.post('/asignaciones', data);
+  const response = await api.post(`/asignaciones`, data);
   return response.data;
 };
 

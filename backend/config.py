@@ -8,9 +8,7 @@ from datetime import timedelta
 
 class Config:
     """Configuración base"""
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-key-change-in-production'
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=2)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
     # SQLAlchemy
@@ -20,11 +18,28 @@ class Config:
         'pool_recycle': 300,
     }
 
+    # Mail / Bulk
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', '')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', '587') or 587)
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME', '') or os.environ.get('MAIL_USER', '')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD', '')
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', '') or os.environ.get('MAIL_USERNAME', '')
+    BULK_EMAIL_ENABLED = os.environ.get('BULK_EMAIL_ENABLED', 'true').lower() == 'true'
+    CORS_ORIGINS = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()] if os.environ.get('CORS_ORIGINS') else []
+
+    # Hidden invite tokens for registration (no public signup)
+    ALUMNO_INVITE_TOKEN = os.environ.get('ALUMNO_INVITE_TOKEN', 'ca2d949f-5cd2-4785-918e-205d6566f4e7')
+    PROFESOR_INVITE_TOKEN = os.environ.get('PROFESOR_INVITE_TOKEN', 'ef4a3a25-0214-4581-97dc-5104bb06c748')
+
 
 class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""
     DEBUG = True
     ENV = 'development'
+    
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key')
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
     
     # Usar DATABASE_URL si está definida (Docker), sino usar path local
     db_url = os.environ.get('DATABASE_URL')
@@ -42,6 +57,15 @@ class ProductionConfig(Config):
     """Configuración de producción - MySQL"""
     DEBUG = False
     ENV = 'production'
+    
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    
+    def __init__(self):
+        if not self.JWT_SECRET_KEY:
+            raise RuntimeError("JWT_SECRET_KEY missing")
+        if not self.SECRET_KEY:
+            raise RuntimeError("SECRET_KEY missing")
     
     # MySQL connection string
     MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
@@ -61,6 +85,8 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
+    SECRET_KEY = 'test-secret-key'
+    JWT_SECRET_KEY = 'test-jwt-secret-key'
 
 
 # Mapeo de configuraciones por entorno

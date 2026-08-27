@@ -1,7 +1,7 @@
 import api from './index';
 
 export const getGrupos = async (params = {}) => {
-  const response = await api.get('/grupos', { params });
+  const response = await api.get(`/grupos`, { params });
   return response.data.grupos || [];
 };
 
@@ -11,7 +11,7 @@ export const getGrupo = async (id) => {
 };
 
 export const createGrupo = async (data) => {
-  const response = await api.post('/grupos', data);
+  const response = await api.post(`/grupos`, data);
   return response.data;
 };
 

@@ -3,6 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function Navbar({ onMenuClick }) {
   const { user, logout } = useAuth();
+  const isAdmin = user?.rol === 'admin';
+  const isAlumno = user?.rol === 'alumno';
+  const isProfesor = user?.rol === 'profesor';
 
   return (
     <header className="sticky top-0 z-30 glass mb-6">

@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import { useToast } from '../../components/ui/Toast';
 import { getAlumnos } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
 import { getMaterias } from '../../api/materias';
 import { getAlumnosConPagosPendientes } from '../../api/pagos';
+import { CardSkeleton } from '../../components/ui/Skeleton';
 import {
   Users,
   GraduationCap,
@@ -19,6 +22,7 @@ import {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [stats, setStats] = useState({
     alumnos: 0,
     carreras: 0,
@@ -27,30 +31,38 @@ export default function AdminDashboard() {
     alumnosConDeuda: 0,
     totalAdeudo: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadStats = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [alumnosResponse, carreras, materias, pagosData] = await Promise.all([
+        getAlumnos({ per_page: 1 }).catch(() => ({ total: 0 })),
+        getCarreras().catch(() => []),
+        getMaterias().catch(() => []),
+        getAlumnosConPagosPendientes().catch(() => ({ alumnos: [], total_adeudo: 0 })),
+      ]);
+
+      setStats({
+        alumnos: alumnosResponse?.total || 0,
+        carreras: Array.isArray(carreras) ? carreras.length : 0,
+        materias: Array.isArray(materias) ? materias.length : 0,
+        pagosPendientes: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
+        alumnosConDeuda: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
+        totalAdeudo: pagosData.total_adeudo || 0,
+      });
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Error loading stats:', err);
+      setError('Error al cargar datos del dashboard');
+      toast.error('Error al cargar datos del dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const [alumnos, carreras, materias, pagosData] = await Promise.all([
-          getAlumnos().catch(() => []),
-          getCarreras().catch(() => []),
-          getMaterias().catch(() => []),
-          getAlumnosConPagosPendientes().catch(() => ({ alumnos: [], total_adeudo: 0 })),
-        ]);
-
-        setStats({
-          alumnos: Array.isArray(alumnos) ? alumnos.length : 0,
-          carreras: Array.isArray(carreras) ? carreras.length : 0,
-          materias: Array.isArray(materias) ? materias.length : 0,
-          pagosPendientes: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
-          alumnosConDeuda: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
-          totalAdeudo: pagosData.total_adeudo || 0,
-        });
-      } catch (error) {
-        console.error('Error loading stats:', error);
-      }
-    };
-
     loadStats();
   }, []);
 
@@ -124,9 +136,18 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {error && (
+        <Card className="p-6 text-center">
+          <p className="text-red-600 mb-3">{error}</p>
+          <Button onClick={loadStats}>Reintentar</Button>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
+          : statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card

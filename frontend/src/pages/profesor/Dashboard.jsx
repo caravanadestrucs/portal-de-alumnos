@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../components/ui/Toast';
 import { getAsignacionesActuales } from '../../api/asignaciones';
 import Card from '../../components/ui/Card';
+import { CardSkeleton, TableSkeleton } from '../../components/ui/Skeleton';
 import { BookOpen, Users, Calendar, Edit } from 'lucide-react';
 
 export default function ProfesorDashboard() {
   const { user } = useAuth();
+  const toast = useToast();
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,6 +23,7 @@ export default function ProfesorDashboard() {
         setAsignaciones(data.asignaciones || []);
       } catch (error) {
         console.error('Error loading:', error);
+        toast.error('Error al cargar datos del dashboard');
       } finally {
         setLoading(false);
       }
@@ -45,23 +49,29 @@ export default function ProfesorDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="text-center">
-          <BookOpen size={28} className="mx-auto text-primary-500 mb-2" />
-          <p className="text-sm text-gray-500">Materias Asignadas</p>
-          <p className="text-2xl font-bold text-gray-800">{asignaciones.length}</p>
-        </Card>
-        <Card className="text-center">
-          <Users size={28} className="mx-auto text-green-500 mb-2" />
-          <p className="text-sm text-gray-500">Total Alumnos</p>
-          <p className="text-2xl font-bold text-gray-800">{totalAlumnos}</p>
-        </Card>
-        <Card className="text-center">
-          <Calendar size={28} className="mx-auto text-accent-500 mb-2" />
-          <p className="text-sm text-gray-500">Período Actual</p>
-          <p className="text-lg font-bold text-gray-800">
-            {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
-          </p>
-        </Card>
+        {loading
+          ? Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)
+          : (
+            <>
+              <Card className="text-center">
+                <BookOpen size={28} className="mx-auto text-primary-500 mb-2" />
+                <p className="text-sm text-gray-500">Materias Asignadas</p>
+                <p className="text-2xl font-bold text-gray-800">{asignaciones.length}</p>
+              </Card>
+              <Card className="text-center">
+                <Users size={28} className="mx-auto text-green-500 mb-2" />
+                <p className="text-sm text-gray-500">Total Alumnos</p>
+                <p className="text-2xl font-bold text-gray-800">{totalAlumnos}</p>
+              </Card>
+              <Card className="text-center">
+                <Calendar size={28} className="mx-auto text-accent-500 mb-2" />
+                <p className="text-sm text-gray-500">Período Actual</p>
+                <p className="text-lg font-bold text-gray-800">
+                  {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                </p>
+              </Card>
+            </>
+          )}
       </div>
 
       {/* Mis Asignaciones */}
@@ -71,12 +81,11 @@ export default function ProfesorDashboard() {
         </h2>
         
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          </div>
+          <TableSkeleton rows={5} columns={3} />
         ) : asignaciones.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No tienes asignaciones activas en este período
+          <div className="glass p-8 text-center">
+            <p className="font-medium text-gray-700">Fuera de período lectivo</p>
+            <p className="text-sm text-gray-500 mt-1">El cuatrimestre actual no tiene asignaciones activas. Tus grupos volverán en el próximo período.</p>
           </div>
         ) : (
           <div className="space-y-4">

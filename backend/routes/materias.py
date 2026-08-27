@@ -16,18 +16,37 @@ def list_materias():
     Lista todas las materias
     Query params:
         - carrera_id: filtrar por carrera
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
     carrera_id = request.args.get('carrera_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    try:
+        per_page = int(request.args.get('per_page', 0))
+        if per_page != 0:
+            per_page = max(1, min(per_page, 100))
+        # 0 = all solo para admin
+    except:
+        per_page = 20
     
     query = Materia.query
     
     if carrera_id:
         query = query.filter(Materia.carrera_id == carrera_id)
     
-    materias = query.order_by(Materia.nombre).all()
+    query = query.order_by(Materia.nombre)
+    
+    if per_page > 0:
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        items = pagination.items
+        total = pagination.total
+    else:
+        items = query.all()
+        total = len(items)
     
     return jsonify({
-        'materias': [m.to_dict() for m in materias]
+        'materias': [m.to_dict() for m in items],
+        'total': total
     }), 200
 
 
@@ -54,7 +73,7 @@ def create_materia():
         return jsonify({'error': 'La carrera es requerida'}), 400
     
     # Verificar que la carrera exista
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'La carrera especificada no existe'}), 404
     
@@ -162,7 +181,7 @@ def update_materia(id):
         if 'creditos' in data:
             materia.creditos = data['creditos']
         if 'carrera_id' in data:
-            new_carrera = Carrera.query.get(data['carrera_id'])
+            new_carrera = db.session.get(Carrera, data['carrera_id'])
             if not new_carrera:
                 return jsonify({'error': 'La carrera especificada no existe'}), 404
             materia.carrera_id = data['carrera_id']

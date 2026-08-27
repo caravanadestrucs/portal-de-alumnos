@@ -3,11 +3,16 @@ import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { getCalificacionesByAlumno } from '../../api/calificaciones';
-import { BookOpen, TrendingUp } from 'lucide-react';
+import { getMaterias } from '../../api/materias';
+import { BookOpen, TrendingUp, Map } from 'lucide-react';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
+import CurriculumGraph from '../../components/curriculum/CurriculumGraph';
 
 export default function MisCalificaciones() {
   const { user } = useAuth();
   const [calificaciones, setCalificaciones] = useState([]);
+  const [materias, setMaterias] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,8 +23,12 @@ export default function MisCalificaciones() {
       }
       setLoading(true);
       try {
-        const data = await getCalificacionesByAlumno(user.id).catch(() => []);
-        setCalificaciones(data);
+        const [calData, matData] = await Promise.all([
+          getCalificacionesByAlumno(user.id).catch(() => []),
+          getMaterias().catch(() => []),
+        ]);
+        setCalificaciones(calData);
+        setMaterias(Array.isArray(matData) ? matData : []);
       } catch (error) {
         console.error('Error loading calificaciones:', error);
         setCalificaciones([]);
@@ -31,13 +40,6 @@ export default function MisCalificaciones() {
     loadCalificaciones();
   }, [user]);
 
-  // Escala 0-10, aprobado >= 7
-  const getGradeClass = (grade) => {
-    if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
-    if (grade >= 6) return 'text-green-600 font-bold';
-    return 'text-red-500';
-  };
-
   // Obtener la calificación final (Extra tiene prioridad sobre Final)
   const getCalificacionFinal = (cal) => {
     if (cal.extra_2 && cal.extra_2 > 0) return cal.extra_2;
@@ -48,16 +50,43 @@ export default function MisCalificaciones() {
   const getEstado = (cal) => {
     const final = getCalificacionFinal(cal);
     if (!final || final === 0) return { text: 'Sin calificar', variant: 'default' };
-    return final >= 7 
+    return final >= 8 
       ? { text: 'Aprobado', variant: 'success' }
       : { text: 'Reprobado', variant: 'danger' };
   };
 
-  // Calculate stats
+  // Calculate stats — fix NaN: filtrar solo calificadas >0 y evitar división por 0
   const totalMaterias = calificaciones.length;
-  const promedio = calificaciones.length > 0
-    ? calificaciones.reduce((sum, c) => sum + (getCalificacionFinal(c) || 0), 0) / calificaciones.filter(c => getCalificacionFinal(c) > 0).length
-    : null;
+  const filtered = calificaciones.filter(c => {
+    const eff = getEffectiveGrade(c);
+    return eff.value != null && eff.value !== "" && Number(eff.value) > 0;
+  });
+  const promedio = filtered.length
+    ? (filtered.reduce((s, c) => s + Number(getEffectiveGrade(c).value), 0) / filtered.length).toFixed(2)
+    : "-";
+
+  // Build graph data: merge materias + calificaciones → estado coloreado
+  const graphMaterias = (() => {
+    if (!materias.length) return [];
+    // index calificaciones by materia id
+    const calByMateria = new Map();
+    for (const cal of calificaciones) {
+      const mid = cal.materia?.id ?? cal.materia_id ?? cal.id;
+      if (mid != null) calByMateria.set(Number(mid), cal);
+    }
+    return materias.map((m) => {
+      const cal = calByMateria.get(Number(m.id));
+      if (!cal) return { ...m, estado: 'pendiente' };
+      const eff = getEffectiveGrade(cal);
+      if (eff.value == null || eff.value === '' || Number(eff.value) === 0 || isNaN(Number(eff.value))) {
+        // has cal record but no grade → cursando/regular
+        return { ...m, estado: 'cursando', nota: eff.value };
+      }
+      const num = Number(eff.value);
+      if (num >= 8) return { ...m, estado: 'aprobado', nota: eff.value };
+      return { ...m, estado: 'reprobado', nota: eff.value };
+    });
+  })();
 
   return (
     <div className="space-y-6">
@@ -65,7 +94,7 @@ export default function MisCalificaciones() {
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Mis Calificaciones</h1>
         <p className="text-gray-500 mt-1">
-          Historial académico - Escala 0-10 (mínimo 7 para aprobar)
+          Historial académico - Escala 0-10 (mínimo 8 para aprobar)
         </p>
       </div>
 
@@ -79,27 +108,37 @@ export default function MisCalificaciones() {
         <Card className="text-center">
           <TrendingUp size={28} className="mx-auto text-accent-500 mb-2" />
           <p className="text-sm text-gray-500">Promedio</p>
-          <p className={`text-2xl font-bold ${promedio ? getGradeClass(promedio) : 'text-gray-400'}`}>
-            {promedio ? promedio.toFixed(1) : '-'}
+          <p className={`text-2xl font-bold ${promedio !== "-" ? getGradeClass(promedio) : 'text-gray-400'}`}>
+            {promedio !== "-" ? Number(promedio).toFixed(1) : '-'}
           </p>
         </Card>
         <Card className="text-center">
           <TrendingUp size={28} className="mx-auto text-green-500 mb-2" />
           <p className="text-sm text-gray-500">Aprobadas</p>
           <p className="text-2xl font-bold text-green-600">
-            {calificaciones.filter(c => getCalificacionFinal(c) >= 7).length}
+            {calificaciones.filter(c => getCalificacionFinal(c) >= 8).length}
           </p>
         </Card>
       </div>
+
+      {/* Curriculum Graph — avance coloreado */}
+      {graphMaterias.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 mb-4">
+            <Map size={20} className="text-primary-600" />
+            <h2 className="text-xl font-bold text-gray-800">Mapa Curricular</h2>
+            <span className="text-xs text-gray-400 ml-2">{graphMaterias.length} materias · 9 cuatrimestres</span>
+          </div>
+          <CurriculumGraph materias={graphMaterias} onMateriaClick={() => {}} />
+        </Card>
+      )}
 
       {/* Calificaciones Table */}
       <Card>
         <h2 className="text-xl font-bold text-gray-800 mb-4">Detalle por Materia</h2>
         
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          </div>
+          <TableSkeleton rows={5} columns={10} />
         ) : calificaciones.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No tienes calificaciones registradas
@@ -123,7 +162,7 @@ export default function MisCalificaciones() {
               </thead>
               <tbody>
                 {calificaciones.map((cal) => {
-                  const final = getCalificacionFinal(cal);
+                  const effective = getEffectiveGrade(cal);
                   const estado = getEstado(cal);
                   return (
                     <tr key={cal.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -148,8 +187,12 @@ export default function MisCalificaciones() {
                       <td className={`text-center py-3 px-2 ${getGradeClass(cal.practica_2)}`}>
                         {cal.practica_2 || '-'}
                       </td>
-                      <td className={`text-center py-3 px-2 font-bold ${getGradeClass(final)}`}>
-                        {final || '-'}
+                      <td className={`text-center py-3 px-2 font-bold ${getGradeClass(effective.value)}`}>
+                        {effective.value != null && effective.value !== "" && Number(effective.value) !== 0 ? (
+                          <span>
+                            {effective.value} <small className="text-xs opacity-70 font-normal">({effective.source})</small>
+                          </span>
+                        ) : '-'}
                       </td>
                       <td className="text-center py-3 px-2">
                         <Badge variant={estado.variant}>

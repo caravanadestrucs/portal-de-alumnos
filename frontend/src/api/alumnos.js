@@ -1,9 +1,9 @@
 import api from './index';
 
-export const getAlumnos = async () => {
-  const response = await api.get('/alumnos');
+export const getAlumnos = async (params = {}) => {
+  const response = await api.get('/alumnos', { params });
   // El backend devuelve { alumnos: [...], total, page, pages }
-  return response.data.alumnos || [];
+  return response.data;
 };
 
 export const getAlumno = async (id) => {
@@ -28,5 +28,11 @@ export const deleteAlumno = async (id) => {
 
 export const getMisDatos = async () => {
   const response = await api.get('/alumnos/mis-datos');
+  return response.data;
+};
+
+export const sendBulkCredentials = async (alumno_ids, reset_password = true) => {
+  const ids = alumno_ids;
+  const response = await api.post('/alumnos/send-credentials', { ids, alumno_ids: ids, reset_password });
   return response.data;
 };

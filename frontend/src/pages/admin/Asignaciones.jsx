@@ -6,6 +6,10 @@ import { getGrupos } from '../../api/grupos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Select from '../../components/ui/Select';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, Calendar, Users } from 'lucide-react';
 
 export default function AdminAsignaciones() {
@@ -33,6 +37,9 @@ export default function AdminAsignaciones() {
   const [grupoCarreraId, setGrupoCarreraId] = useState(null);
   
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const toast = useToast();
   const [filtroProfesor, setFiltroProfesor] = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
 
@@ -141,20 +148,24 @@ export default function AdminAsignaciones() {
       closeModal();
       loadData();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Eliminar esta asignación?')) {
-      try {
-        await deleteAsignacion(id);
-        loadData();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteAsignacion(deleteTarget.id);
+      toast.success('Asignación eliminada');
+      setDeleteTarget(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -184,48 +195,29 @@ export default function AdminAsignaciones() {
       {/* Filters */}
       <Card>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por profesor
-            </label>
-            <select
-              value={filtroProfesor}
-              onChange={(e) => setFiltroProfesor(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todos los profesores</option>
-              {profesores.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.titulo} {p.nombre} {p.apellido_paterno}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por grupo
-            </label>
-            <select
-              value={filtroGrupo}
-              onChange={(e) => setFiltroGrupo(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todos los grupos</option>
-              {grupos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre} - {g.carrera?.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select label="Filtrar por profesor" value={filtroProfesor} onChange={(e) => setFiltroProfesor(e.target.value)}>
+            <option value="">Todos los profesores</option>
+            {profesores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.titulo} {p.nombre} {p.apellido_paterno}
+              </option>
+            ))}
+          </Select>
+          <Select label="Filtrar por grupo" value={filtroGrupo} onChange={(e) => setFiltroGrupo(e.target.value)}>
+            <option value="">Todos los grupos</option>
+            {grupos.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nombre} - {g.carrera?.nombre}
+              </option>
+            ))}
+          </Select>
         </div>
       </Card>
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando asignaciones...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={7} />
         </Card>
       ) : filteredAsignaciones.length === 0 ? (
         <Card className="text-center py-12">
@@ -234,6 +226,12 @@ export default function AdminAsignaciones() {
           <p className="text-sm text-gray-400 mt-1">
             Crea la primera asignación para comenzar
           </p>
+          <div className="mt-4">
+            <Button onClick={openNewModal}>
+              <Plus size={18} />
+              Crear primera asignación
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -304,10 +302,15 @@ export default function AdminAsignaciones() {
                           <Edit size={18} className="text-primary-500" />
                         </button>
                         <button
-                          onClick={() => handleDelete(a.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg"
+                          onClick={() => setDeleteTarget(a)}
+                          disabled={isDeleting && deleteTarget?.id === a.id}
+                          className={`p-2 rounded-lg ${isDeleting && deleteTarget?.id === a.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          <Trash2 size={18} className="text-red-500" />
+                          {isDeleting && deleteTarget?.id === a.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={18} className="text-red-500" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -318,6 +321,18 @@ export default function AdminAsignaciones() {
           </div>
         </Card>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar asignación"
+        message={deleteTarget ? `¿Eliminar la asignación de ${deleteTarget.profesor?.nombre || 'este profesor'} — ${deleteTarget.materia?.nombre || 'materia'} (${deleteTarget.grupo?.nombre || 'grupo'})?` : '¿Eliminar esta asignación?'}
+        impactSummary="El profesor perderá acceso a calificar este grupo/materia."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
 
       {/* Modal */}
       {showModal && (
@@ -333,45 +348,33 @@ export default function AdminAsignaciones() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* 1. Seleccionar Profesor */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Profesor *
-                </label>
-                <select
-                  required
-                  value={formData.profesor_id}
-                  onChange={(e) => setFormData({ ...formData, profesor_id: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar profesor</option>
-                  {profesores.filter(p => p.activo).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.titulo} {p.nombre} {p.apellido_paterno}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Profesor *"
+                required
+                value={formData.profesor_id}
+                onChange={(e) => setFormData({ ...formData, profesor_id: parseInt(e.target.value) })}
+              >
+                <option value="">Seleccionar profesor</option>
+                {profesores.filter(p => p.activo).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.titulo} {p.nombre} {p.apellido_paterno}
+                  </option>
+                ))}
+              </Select>
 
-              {/* 2. Seleccionar Grupo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Grupo *
-                </label>
-                <select
-                  required
-                  value={formData.grupo_id}
-                  onChange={(e) => handleGrupoChange(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar grupo</option>
-                  {grupos.filter(g => g.activo).map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.nombre} - {g.carrera?.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Grupo *"
+                required
+                value={formData.grupo_id}
+                onChange={(e) => handleGrupoChange(e.target.value)}
+              >
+                <option value="">Seleccionar grupo</option>
+                {grupos.filter(g => g.activo).map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre} - {g.carrera?.nombre}
+                  </option>
+                ))}
+              </Select>
 
               {/* 3. Seleccionar Materia (solo de la carrera del grupo) */}
               <div>

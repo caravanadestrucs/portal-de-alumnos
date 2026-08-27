@@ -1,7 +1,7 @@
 import api from './index';
 
 export const getMaterias = async () => {
-  const response = await api.get('/materias');
+  const response = await api.get(`/materias`);
   // El backend devuelve { materias: [...] }
   return response.data.materias || [];
 };
@@ -12,7 +12,7 @@ export const getMateria = async (id) => {
 };
 
 export const createMateria = async (materiaData) => {
-  const response = await api.post('/materias', materiaData);
+  const response = await api.post(`/materias`, materiaData);
   return response.data;
 };
 

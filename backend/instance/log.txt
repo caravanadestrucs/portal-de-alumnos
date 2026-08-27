@@ -1,0 +1,4 @@
+  File "<string>", line 1
+    import sqlite3; conn = sqlite3.connect('portal.db'); c = conn.cursor(); c.execute('SELECT sql FROM sqlite_master WHERE type=\\'table\\''); print('ok')
+                                                                                                                                                         ^
+SyntaxError: unexpected character after line continuation character

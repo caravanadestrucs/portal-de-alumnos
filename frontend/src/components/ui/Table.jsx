@@ -32,7 +32,7 @@ export default function Table({
     <div className="glass rounded-2xl overflow-hidden">
       <div className="table-container">
         <table className="table-glass">
-          <thead>
+          <thead className="sticky top-0 bg-white z-10">
             <tr>
               {columns.map((col) => (
                 <th
@@ -51,6 +51,9 @@ export default function Table({
                 key={row.id || rowIndex}
                 onClick={() => onRowClick?.(row)}
                 className={onRowClick ? 'cursor-pointer' : ''}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(row) : undefined}
               >
                 {columns.map((col) => (
                   <td key={col.key} className={col.cellClassName || ''}>

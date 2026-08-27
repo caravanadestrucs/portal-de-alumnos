@@ -1,30 +1,30 @@
-FROM node:18-bullseye
+# TODO Sprint 3: multi-stage build with nginx for prod
+FROM node:18-alpine
 
-WORKDIR /app/
+WORKDIR /app
 
-# ARG for Vite (needs to be available at build time)
-ARG VITE_API_URL=http://localhost:5000/api/
-
-# Copy dependency files FIRST (to leverage cache)
+# Copiar archivos de dependencias
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps/
+# Instalar dependencias
+RUN npm install
 
-# Install vite GLOBALLY (avoids permission issues)
-RUN npm install -g vite/
+# Build-time env for Vite (baked into JS)
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_ALUMNO_INVITE_TOKEN
+ENV VITE_ALUMNO_INVITE_TOKEN=$VITE_ALUMNO_INVITE_TOKEN
+ARG VITE_PROFESOR_INVITE_TOKEN
+ENV VITE_PROFESOR_INVITE_TOKEN=$VITE_PROFESOR_INVITE_TOKEN
 
-# Copy the rest of the code (node_modules is ignored by .dockerignore)
-COPY . ./
+# Copiar el resto del código
+COPY . .
 
-# Build for production using the GLOBAL vite path
-RUN /usr/local/bin/vite build/
+# Dar permisos de ejecución a vite
+RUN chmod +x node_modules/.bin/vite || true
 
-# Install serve to serve static files
-RUN npm install -g serve/
+# Exponer el puerto de desarrollo
+EXPOSE 3000
 
-# Expose the port
-EXPOSE 3000/
-
-# Serve with serve
-CMD ["serve", "-l", "3000", "-s", "dist"]
+# Comando para desarrollo
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

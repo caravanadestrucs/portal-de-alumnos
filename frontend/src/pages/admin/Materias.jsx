@@ -3,7 +3,12 @@ import { getMaterias, createMateria, updateMateria, deleteMateria } from '../../
 import { getCarreras } from '../../api/carreras';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import Select from '../../components/ui/Select';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, BookOpen, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import Modal from '../../components/ui/Modal';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -20,6 +25,9 @@ export default function AdminMaterias() {
     carrera_id: '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const toast = useToast();
 
   // Filtros y paginación
   const [searchTerm, setSearchTerm] = useState('');
@@ -113,20 +121,24 @@ export default function AdminMaterias() {
       closeModal();
       loadData();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Eliminar esta materia?')) {
-      try {
-        await deleteMateria(id);
-        loadData();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteMateria(deleteTarget.id);
+      toast.success('Materia eliminada');
+      setDeleteTarget(null);
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -164,23 +176,18 @@ export default function AdminMaterias() {
               <Search size={18} className="absolute left-3 top-3 text-gray-400" />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Filtrar por carrera
-            </label>
-            <select
-              value={filtroCarrera}
-              onChange={(e) => setFiltroCarrera(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl input-glass"
-            >
-              <option value="">Todas las carreras</option>
-              {carreras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Filtrar por carrera"
+            value={filtroCarrera}
+            onChange={(e) => setFiltroCarrera(e.target.value)}
+          >
+            <option value="">Todas las carreras</option>
+            {carreras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </Select>
         </div>
       </Card>
 
@@ -192,9 +199,8 @@ export default function AdminMaterias() {
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={5} />
         </Card>
       ) : paginatedMaterias.length === 0 ? (
         <Card className="text-center py-12">
@@ -202,6 +208,14 @@ export default function AdminMaterias() {
           <p className="text-gray-500">
             {searchTerm || filtroCarrera ? 'No hay materias que coincidan' : 'No hay materias registradas'}
           </p>
+          {!searchTerm && !filtroCarrera && (
+            <div className="mt-4">
+              <Button onClick={openNewModal}>
+                <Plus size={18} />
+                Crear primera materia
+              </Button>
+            </div>
+          )}
         </Card>
       ) : (
         <Card>
@@ -261,10 +275,15 @@ export default function AdminMaterias() {
                           <Edit size={16} className="text-primary-600" />
                         </button>
                         <button
-                          onClick={() => handleDelete(materia.id)}
-                          className="p-2 hover:bg-red-50 rounded-lg"
+                          onClick={() => setDeleteTarget(materia)}
+                          disabled={isDeleting && deleteTarget?.id === materia.id}
+                          className={`p-2 rounded-lg ${isDeleting && deleteTarget?.id === materia.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-50'}`}
                         >
-                          <Trash2 size={16} className="text-red-500" />
+                          {isDeleting && deleteTarget?.id === materia.id ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 size={16} className="text-red-500" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -333,92 +352,86 @@ export default function AdminMaterias() {
         </Card>
       )}
 
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar materia"
+        message={deleteTarget ? `¿Eliminar la materia "${deleteTarget.nombre}" (${deleteTarget.codigo})?` : '¿Eliminar esta materia?'}
+        impactSummary="Se eliminarán calificaciones y asignaciones asociadas. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-800">
-                {editingMateria ? 'Editar Materia' : 'Nueva Materia'}
-              </h2>
-              <button onClick={closeModal} className="p-2 hover:bg-gray-100 rounded-lg">
-                ✕
-              </button>
-            </div>
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={editingMateria ? 'Editar Materia' : 'Nueva Materia'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeModal}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} form="materia-form">
+              {editingMateria ? 'Actualizar' : 'Crear Materia'}
+            </Button>
+          </>
+        }
+      >
+        <form id="materia-form" onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Código *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.codigo}
+              onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl input-glass"
+              placeholder="Ej: ISC101"
+            />
+          </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Código *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.codigo}
-                  onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                  placeholder="Ej: ISC101"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.nombre}
+              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl input-glass"
+              placeholder="Nombre de la materia"
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Nombre *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                  placeholder="Nombre de la materia"
-                />
-              </div>
+          <Select label="Carrera" value={formData.carrera_id} onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })} required>
+            <option value="">Seleccionar</option>
+            {carreras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </Select>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Carrera *
-                </label>
-                <select
-                  required
-                  value={formData.carrera_id}
-                  onChange={(e) => setFormData({ ...formData, carrera_id: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                >
-                  <option value="">Seleccionar</option>
-                  {carreras.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Créditos
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={formData.creditos}
-                  onChange={(e) => setFormData({ ...formData, creditos: parseInt(e.target.value) || 0 })}
-                  className="w-full px-4 py-2.5 rounded-xl input-glass"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <Button type="button" variant="ghost" onClick={closeModal}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? 'Guardando...' : editingMateria ? 'Actualizar' : 'Crear'}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Créditos
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={formData.creditos}
+              onChange={(e) => setFormData({ ...formData, creditos: parseInt(e.target.value) || 0 })}
+              className="w-full px-4 py-2.5 rounded-xl input-glass"
+            />
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

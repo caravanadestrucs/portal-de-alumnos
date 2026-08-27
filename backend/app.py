@@ -3,6 +3,7 @@ Portal de Calificaciones - Universidad Felipe Villanueva
 Backend Flask API
 """
 import os
+import logging
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -10,7 +11,8 @@ from flask_migrate import Migrate
 from datetime import timedelta
 
 from config import get_config
-from models import db, init_db
+from models import db
+from extensions import limiter
 
 
 def create_app(config_name=None):
@@ -24,6 +26,10 @@ def create_app(config_name=None):
     
     app = Flask(__name__)
     
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO)
+    app.logger.setLevel(logging.INFO)
+    
     # Cargar configuración
     if config_name:
         app.config.from_object(config_name)
@@ -32,26 +38,36 @@ def create_app(config_name=None):
         app.config.from_object(config)
     
     # Configuración adicional
+    app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB para importación
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=2)
     
     # Inicializar extensiones
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3050",
+        "http://127.0.0.1:3050",
+        "http://89.116.51.59:3050",
+        "http://89.116.51.59:5050",
+        "http://localhost:5173",
+        "https://alumnos.felipe-villa-nueva-teotitlan.site",
+        "http://alumnos.felipe-villa-nueva-teotitlan.site",
+        "https://extras.felipe-villa-nueva-teotitlan.site",
+        "http://extras.felipe-villa-nueva-teotitlan.site",
+    ]
+    env_origins = app.config.get("CORS_ORIGINS") or []
+    origins = env_origins if env_origins else default_origins
     CORS(app, 
          supports_credentials=True,
-         origins=[
-             "http://localhost:3000",
-             "http://127.0.0.1:3000",
-             "http://localhost:3050",
-             "http://127.0.0.1:3050",
-             "http://89.116.51.59:3050",
-             "http://89.116.51.59:5050"
-         ],
+         origins=origins,
          allow_headers=["Content-Type", "Authorization", "Accept"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
     )
     JWTManager(app)
+    limiter.init_app(app)
     Migrate(app, db)
     
     # Inicializar base de datos
@@ -71,6 +87,9 @@ def create_app(config_name=None):
     from routes.asignaciones import asignaciones_bp
     from routes.profesor import profesor_bp
     from routes.practicas import practicas_bp
+    from routes.settings import settings_bp
+    from routes.imports import imports_bp
+    from routes.boletas import boletas_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(alumnos_bp, url_prefix='/api/alumnos')
@@ -85,6 +104,9 @@ def create_app(config_name=None):
     app.register_blueprint(asignaciones_bp, url_prefix='/api/asignaciones')
     app.register_blueprint(profesor_bp, url_prefix='/api/profesor')
     app.register_blueprint(practicas_bp, url_prefix='/api/practicas')
+    app.register_blueprint(settings_bp, url_prefix='/api/config')
+    app.register_blueprint(imports_bp, url_prefix='/api/imports')
+    app.register_blueprint(boletas_bp, url_prefix='/api/boletas')
     
     # Health check endpoint
     @app.route('/api/health')
@@ -175,6 +197,13 @@ def create_app(config_name=None):
             'code': 'CONFLICT'
         }), 409
     
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        return jsonify({
+            'error': 'El archivo excede el límite de 10MB',
+            'code': 'FILE_TOO_LARGE'
+        }), 413
+    
     @app.errorhandler(422)
     def validation_error(error):
         return jsonify({
@@ -212,9 +241,24 @@ with app.app_context():
         admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
-        print('[OK] Admin por defecto creado')
-        print('   Email: admin@universidadfv.edu.mx')
-        print('   Contrasena: admin123')
+        app.logger.info("Default admin created - change password on first login")
+    
+    # Seed de configuración por defecto
+    from models import Config
+    defaults = {
+        'smtp_host': '',
+        'smtp_port': '587',
+        'smtp_email': '',
+        'smtp_password': '',
+        'smtp_use_tls': 'true',
+        'app_name': 'Portal de Calificaciones',
+        'app_logo_url': '',
+    }
+    for key, value in defaults.items():
+        if not Config.query.filter_by(key=key).first():
+            db.session.add(Config(key=key, value=value))
+    db.session.commit()
+    print('[OK] Configuración por defecto creada')
 
 
 if __name__ == '__main__':

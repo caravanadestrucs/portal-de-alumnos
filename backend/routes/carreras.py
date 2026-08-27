@@ -168,6 +168,7 @@ def get_carrera_materias(id):
 
 
 @carreras_bp.route('/<int:id>/alumnos', methods=['GET'])
+@admin_required
 def get_carrera_alumnos(id):
     """
     Obtiene los alumnos de una carrera
@@ -176,7 +177,10 @@ def get_carrera_alumnos(id):
     
     # Parámetros de paginación
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except:
+        per_page = 20
     
     pagination = carrera.alumnos.order_by(
         db.text('apellido_paterno'), db.text('nombre')

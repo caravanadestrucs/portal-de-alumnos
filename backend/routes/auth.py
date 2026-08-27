@@ -1,26 +1,70 @@
 """
-Rutas de autenticación: login, logout, register, me
+Rutas de autenticación: login, logout, register, me, forgot-password, reset-password
 """
-from flask import Blueprint, request, jsonify
+import os
+import time
+import secrets
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import (
     create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity, get_jwt
+    jwt_required, get_jwt
 )
 from datetime import datetime, timedelta
 
-from models import db, Admin, Alumno, Profesor
-from utils.security import generate_tokens, validate_email, validate_numero_control
+from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config
+from utils.security import generate_tokens, validate_email, validate_numero_control, generate_reset_token, verify_reset_token
 from utils.decorators import admin_required, alumno_required
+from utils.email import send_email, render_reset_email
+from extensions import limiter
 
 auth_bp = Blueprint('auth', __name__)
 
 
-@auth_bp.route('/login', methods=['POST'])
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _find_user_by_email(email: str) -> tuple:
+    """
+    Busca un usuario por email secuencialmente en las 3 tablas.
+    
+    El orden de búsqueda es: Admin → Profesor → Alumno.
+    
+    Args:
+        email: Dirección de email a buscar
+    
+    Returns:
+        tuple (user, role_string):
+            - (Admin, 'admin') si se encuentra en admins
+            - (Profesor, 'profesor') si se encuentra en profesores
+            - (Alumno, 'alumno') si se encuentra en alumnos
+            - (None, None) si no se encuentra en ninguna tabla
+    """
+    admin = Admin.query.filter_by(email=email).first()
+    if admin:
+        return admin, 'admin'
+    
+    profesor = Profesor.query.filter_by(email=email).first()
+    if profesor:
+        return profesor, 'profesor'
+    
+    alumno = Alumno.query.filter_by(email=email).first()
+    if alumno:
+        return alumno, 'alumno'
+    
+    return None, None
+
+
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@limiter.limit("10/minute")
 def login():
     """
     Inicio de sesión para admin o alumno
     Body: { email, password }
     """
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     data = request.get_json()
     
     if not data:
@@ -73,6 +117,13 @@ def login():
     if alumno and alumno.check_password(password):
         if not alumno.activo:
             return jsonify({'error': 'Tu cuenta está desactivada. Contacta al administrador.'}), 403
+        # Enforce 24h temp password expiry
+        try:
+            if getattr(alumno, "must_change_password", False) and getattr(alumno, "temp_password_expires_at", None):
+                if datetime.utcnow() > alumno.temp_password_expires_at:
+                    return jsonify({'error': 'temp_password_expired', 'code': 'TEMP_PASSWORD_EXPIRED'}), 401
+        except Exception:
+            pass
         
         tokens = generate_tokens(alumno.id, 'alumno')
         return jsonify({
@@ -92,24 +143,41 @@ def login():
 
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per hour")
 def register():
     """
-    Registro de nuevo alumno (usado desde /signup del frontend)
+    Registro de nuevo alumno via link oculto /r/a/:token
     Body: {
         numero_control, nombre, apellido_paterno, apellido_materno,
-        email, password, carrera_id
+        email, password, carrera_id, invite_token
     }
+    invite_token must match ALUMNO_INVITE_TOKEN else 404 (no reveal).
     """
     data = request.get_json()
     
     if not data:
         return jsonify({'error': 'Datos requeridos'}), 400
+
+    # Validate hidden invite token — 404 to not reveal existence
+    invite_token = data.get('invite_token') or data.get('inviteToken')
+    expected = current_app.config.get('ALUMNO_INVITE_TOKEN') or os.environ.get('ALUMNO_INVITE_TOKEN', 'ca2d949f-5cd2-4785-918e-205d6566f4e7')
+    if not invite_token or invite_token != expected:
+        return jsonify({'error': 'No encontrado'}), 404
     
     # Validaciones
     required_fields = ['numero_control', 'nombre', 'apellido_paterno', 'email', 'password', 'carrera_id']
     for field in required_fields:
         if not data.get(field):
             return jsonify({'error': f'El campo {field} es requerido'}), 400
+
+    # Verify carrera exists
+    try:
+        carrera_id = int(data['carrera_id'])
+    except (ValueError, TypeError):
+        return jsonify({'error': 'carrera_id inválido'}), 400
+    carrera = db.session.get(Carrera, carrera_id)
+    if not carrera:
+        return jsonify({'error': 'La carrera especificada no existe'}), 404
     
     # Validar formato número de control
     if not validate_numero_control(data['numero_control']):
@@ -135,13 +203,27 @@ def register():
             apellido_paterno=data['apellido_paterno'].strip(),
             apellido_materno=data.get('apellido_materno', '').strip() or None,
             email=data['email'].lower().strip(),
-            carrera_id=data['carrera_id'],
+            carrera_id=carrera_id,
             activo=True,
             fecha_registro=datetime.utcnow().date()
         )
         alumno.set_password(data['password'])
         
         db.session.add(alumno)
+        db.session.flush()  # Obtener ID del alumno
+        
+        # Crear boletas para todas las materias de su carrera
+        materias = Materia.query.filter_by(carrera_id=carrera_id).all()
+        periodo_actual = f"Enero-Abril {datetime.now().year}"
+        for materia in materias:
+            calif = Calificacion(
+                alumno_id=alumno.id,
+                materia_id=materia.id,
+                periodo=periodo_actual,
+                anio=datetime.now().year
+            )
+            db.session.add(calif)
+        
         db.session.commit()
         
         # Generar tokens para login automático
@@ -164,6 +246,94 @@ def register():
         return jsonify({'error': f'Error al crear usuario: {str(e)}'}), 500
 
 
+@auth_bp.route('/register/profesor', methods=['POST'])
+@limiter.limit("5 per hour")
+def register_profesor():
+    """
+    Registro de nuevo profesor via link oculto /r/p/:token
+    Body: { nombre, apellido (or apellido_paterno), email, password, invite_token, [numero_empleado, apellido_materno, titulo] }
+    invite_token must match PROFESOR_INVITE_TOKEN else 404.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+
+    invite_token = data.get('invite_token') or data.get('inviteToken')
+    expected = current_app.config.get('PROFESOR_INVITE_TOKEN') or os.environ.get('PROFESOR_INVITE_TOKEN', 'ef4a3a25-0214-4581-97dc-5104bb06c748')
+    if not invite_token or invite_token != expected:
+        return jsonify({'error': 'No encontrado'}), 404
+
+    # Normalize apellido fields
+    apellido_paterno = (data.get('apellido_paterno') or data.get('apellido') or '').strip()
+    required_fields = ['nombre', 'email', 'password']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({'error': f'El campo {field} es requerido'}), 400
+    if not apellido_paterno:
+        return jsonify({'error': 'El campo apellido es requerido'}), 400
+
+    if not validate_email(data['email']):
+        return jsonify({'error': 'Formato de email inválido'}), 400
+
+    email_lower = data['email'].lower().strip()
+
+    # Check duplicates in Profesor and Alumno (and Admin for safety)
+    if Profesor.query.filter_by(email=email_lower).first():
+        return jsonify({'error': 'El email ya está registrado'}), 409
+    if Alumno.query.filter_by(email=email_lower).first():
+        return jsonify({'error': 'El email ya está registrado'}), 409
+
+    # numero_empleado: use provided or generate unique
+    numero_empleado = (data.get('numero_empleado') or '').strip()
+    if not numero_empleado:
+        # Generate unique PROF- + 8 hex
+        for _ in range(5):
+            candidate = f"PROF-{secrets.token_hex(4).upper()}"
+            if not Profesor.query.filter_by(numero_empleado=candidate).first():
+                numero_empleado = candidate
+                break
+        if not numero_empleado:
+            numero_empleado = f"PROF-{int(time.time())}"
+    else:
+        if Profesor.query.filter_by(numero_empleado=numero_empleado).first():
+            return jsonify({'error': 'El número de empleado ya está registrado'}), 409
+
+    if len(data['password']) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+
+    try:
+        profesor = Profesor(
+            numero_empleado=numero_empleado,
+            nombre=data['nombre'].strip(),
+            apellido_paterno=apellido_paterno,
+            apellido_materno=(data.get('apellido_materno') or '').strip() or None,
+            titulo=(data.get('titulo') or '').strip() or None,
+            email=email_lower,
+            activo=True,
+        )
+        profesor.set_password(data['password'])
+        db.session.add(profesor)
+        db.session.commit()
+
+        tokens = generate_tokens(profesor.id, 'profesor')
+
+        return jsonify({
+            'message': 'Registro exitoso',
+            'user': {
+                'type': 'profesor',
+                'id': profesor.id,
+                'numero_empleado': profesor.numero_empleado,
+                'nombre': f"{profesor.nombre} {profesor.apellido_paterno}",
+                'email': profesor.email,
+            },
+            **tokens
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error al crear profesor: {str(e)}'}), 500
+
+
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
@@ -181,12 +351,12 @@ def get_current_user():
     """
     Obtiene la información del usuario actual
     """
-    identity = get_jwt_identity()
-    user_type = identity.get('type')
-    user_id = identity.get('id')
+    claims = get_jwt()
+    user_type = claims.get('type')
+    user_id = claims.get('id')
     
     if user_type == 'admin':
-        admin = Admin.query.get(user_id)
+        admin = db.session.get(Admin, user_id)
         if not admin:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         return jsonify({
@@ -195,7 +365,7 @@ def get_current_user():
         }), 200
     
     elif user_type == 'alumno':
-        alumno = Alumno.query.get(user_id)
+        alumno = db.session.get(Alumno, user_id)
         if not alumno:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         return jsonify({
@@ -212,8 +382,8 @@ def refresh_token():
     """
     Refresca el token de acceso usando el refresh token
     """
-    identity = get_jwt_identity()
-    tokens = generate_tokens(identity['id'], identity['type'])
+    claims = get_jwt()
+    tokens = generate_tokens(claims['id'], claims['type'])
     
     return jsonify({
         'message': 'Token refrescado',
@@ -228,7 +398,7 @@ def change_password():
     Cambiar contraseña del usuario actual
     Body: { current_password, new_password }
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     data = request.get_json()
     
     if not data:
@@ -243,18 +413,23 @@ def change_password():
     if len(new_password) < 6:
         return jsonify({'error': 'La nueva contraseña debe tener al menos 6 caracteres'}), 400
     
-    user_type = identity.get('type')
-    user_id = identity.get('id')
+    user_type = claims.get('type')
+    user_id = claims.get('id')
     
     try:
         if user_type == 'admin':
-            user = Admin.query.get(user_id)
-            if not user.check_password(current_password):
+            user = db.session.get(Admin, user_id)
+            if not user or not user.check_password(current_password):
+                return jsonify({'error': 'Contraseña actual incorrecta'}), 401
+            user.set_password(new_password)
+        elif user_type == 'profesor':
+            user = db.session.get(Profesor, user_id)
+            if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         else:
-            user = Alumno.query.get(user_id)
-            if not user.check_password(current_password):
+            user = db.session.get(Alumno, user_id)
+            if not user or not user.check_password(current_password):
                 return jsonify({'error': 'Contraseña actual incorrecta'}), 401
             user.set_password(new_password)
         
@@ -264,3 +439,132 @@ def change_password():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Error al cambiar contraseña: {str(e)}'}), 500
+
+
+# ============================================================
+# PASSWORD RECOVERY
+# ============================================================
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+@limiter.limit("5/hour")
+def forgot_password():
+    """
+    POST /api/auth/forgot-password
+    Solicitar recuperación de contraseña.
+    
+    Body: { "email": "user@example.com" }
+    
+    SIEMPRE retorna 200 independientemente de si el email existe o no,
+    para no revelar qué emails están registrados (seguridad por obscuridad).
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+    
+    email = data.get('email', '').strip().lower()
+    
+    if not email:
+        return jsonify({'error': 'El email es requerido'}), 400
+    
+    if not validate_email(email):
+        return jsonify({'error': 'Formato de email inválido'}), 400
+    
+    # Buscar usuario en las 3 tablas
+    user, role = _find_user_by_email(email)
+    
+    if user and role:
+        try:
+            # Generar token JWT de 15 minutos
+            token = generate_reset_token(email, role)
+            
+            # Construir URL de reset
+            frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+            reset_url = f"{frontend_url}/reset-password?token={token}"
+            
+            # Leer configuración de personalización para el template
+            app_configs = {c.key: c.value for c in Config.query.all()}
+            app_name = app_configs.get('app_name', 'Portal de Calificaciones')
+            logo_url = app_configs.get('app_logo_url', '')
+            
+            # Renderizar template y enviar email
+            html_body = render_reset_email(reset_url, app_name=app_name, logo_url=logo_url)
+            result = send_email(email, "Recuperación de Contraseña", html_body)
+            
+            if result.get('success'):
+                print(f'[EMAIL] Link de recuperación enviado a {email}')
+            else:
+                print(f'[EMAIL] Error al enviar a {email}: {result.get("error")}')
+                
+        except Exception as e:
+            # Error al generar token o enviar email — loggear pero responder 200
+            print(f'[EMAIL] Error en forgot-password para {email}: {str(e)}')
+    else:
+        # Email no registrado: loggear pero responder igual
+        print(f'[EMAIL] Solicitud de recuperación para email no registrado: {email}')
+        # Pequeño sleep para mitigar timing attacks
+        time.sleep(0.1)
+    
+    # SIEMPRE retornar 200 con el mismo mensaje
+    return jsonify({
+        'message': 'Si el email está registrado, recibirás un enlace de recuperación en tu bandeja de entrada'
+    }), 200
+
+
+@auth_bp.route('/reset-password', methods=['POST'])
+@limiter.limit("10/hour")
+def reset_password():
+    """
+    POST /api/auth/reset-password
+    Restablecer contraseña usando token JWT.
+    
+    Body: { "token": "<jwt>", "password": "nueva-contraseña" }
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+    
+    token = data.get('token')
+    password = data.get('password')
+    
+    if not token:
+        return jsonify({'error': 'Token requerido'}), 400
+    
+    if not password:
+        return jsonify({'error': 'La contraseña es requerida'}), 400
+    
+    if len(password) < 6:
+        return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+    
+    # Verificar token JWT
+    token_data = verify_reset_token(token)
+    if not token_data:
+        return jsonify({'error': 'Token inválido o expirado'}), 400
+    
+    email = token_data.get('email')
+    role = token_data.get('role')
+    
+    # Buscar usuario según el rol del token
+    try:
+        if role == 'admin':
+            user = Admin.query.filter_by(email=email).first()
+        elif role == 'profesor':
+            user = Profesor.query.filter_by(email=email).first()
+        elif role == 'alumno':
+            user = Alumno.query.filter_by(email=email).first()
+        else:
+            return jsonify({'error': 'Rol de usuario inválido'}), 400
+        
+        if not user:
+            return jsonify({'error': 'Usuario no encontrado'}), 400
+        
+        # Actualizar contraseña
+        user.set_password(password)
+        db.session.commit()
+        
+        return jsonify({'message': 'Contraseña actualizada exitosamente'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error al restablecer contraseña: {str(e)}'}), 500

@@ -4,15 +4,19 @@ import { getMisAsignaciones, getGrupoCalificaciones, updateCalificacionProfesor 
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import { useToast } from '../../components/ui/Toast';
 import { Save, BookOpen, Users, AlertCircle, CheckCircle } from 'lucide-react';
+import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
 
 export default function ProfesorCalificaciones() {
+  const toast = useToast();
   const { user } = useAuth();
   const [asignaciones, setAsignaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAsignacion, setSelectedAsignacion] = useState(null);
   const [alumnos, setAlumnos] = useState([]);
-  const [saving, setSaving] = useState(false);
+  const [savingRows, setSavingRows] = useState({});
+  const [savedRows, setSavedRows] = useState({});
 
   useEffect(() => {
     loadAsignaciones();
@@ -44,26 +48,35 @@ export default function ProfesorCalificaciones() {
 
   const handleSave = async (alumnoId, califData) => {
     if (!selectedAsignacion) return;
-    
-    setSaving(true);
+
+    const key = `${alumnoId}-${selectedAsignacion.id}`;
+
+    setSavingRows((prev) => ({ ...prev, [key]: true }));
+
     try {
       await updateCalificacionProfesor(selectedAsignacion.id, {
         alumno_id: alumnoId,
         calificacion: califData
       });
+
+      setSavingRows((prev) => ({ ...prev, [key]: false }));
+      setSavedRows((prev) => ({ ...prev, [key]: true }));
+
+      // Auto-hide confirmation after 2 seconds
+      setTimeout(() => {
+        setSavedRows((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }, 2000);
+
       // Recargar
       await loadAlumnos(selectedAsignacion);
     } catch (error) {
-      alert('Error al guardar: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setSaving(false);
+      setSavingRows((prev) => ({ ...prev, [key]: false }));
+      toast.error('Error al guardar: ' + (error.response?.data?.error || error.message));
     }
-  };
-
-  const getGradeClass = (grade) => {
-    if (grade === null || grade === undefined || grade === 0) return 'text-gray-400';
-    if (grade >= 7) return 'text-green-600 font-bold';
-    return 'text-red-500';
   };
 
   return (
@@ -141,7 +154,7 @@ export default function ProfesorCalificaciones() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-2 font-semibold text-gray-700">Alumno</th>
+                    <th className="text-left py-3 px-2 font-semibold text-gray-700 sticky left-0 bg-white z-10">Alumno</th>
                     <th className="text-center py-3 px-2 font-semibold text-gray-700">A1</th>
                     <th className="text-center py-3 px-2 font-semibold text-gray-700">A2</th>
                     <th className="text-center py-3 px-2 font-semibold text-gray-700">A3</th>
@@ -155,16 +168,20 @@ export default function ProfesorCalificaciones() {
                   </tr>
                 </thead>
                 <tbody>
-                  {alumnos.map(({ alumno, calificacion, puede_editar }) => (
-                    <AlumnoRow
-                      key={alumno.id}
-                      alumno={alumno}
-                      calificacion={calificacion}
-                      puedeEditar={puede_editar && selectedAsignacion.puede_editar}
-                      onSave={(data) => handleSave(alumno.id, data)}
-                      saving={saving}
-                    />
-                  ))}
+                  {alumnos.map(({ alumno, calificacion, puede_editar }) => {
+                    const key = `${alumno.id}-${selectedAsignacion.id}`;
+                    return (
+                      <AlumnoRow
+                        key={alumno.id}
+                        alumno={alumno}
+                        calificacion={calificacion}
+                        puedeEditar={puede_editar && selectedAsignacion.puede_editar}
+                        onSave={(data) => handleSave(alumno.id, data)}
+                        isSaving={!!savingRows[key]}
+                        isSaved={!!savedRows[key]}
+                      />
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -190,7 +207,7 @@ export default function ProfesorCalificaciones() {
 }
 
 // Componente para cada fila de alumno
-function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, saving }) {
+function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, isSaving, isSaved }) {
   const [data, setData] = useState({
     asistencia_1: calificacion?.asistencia_1 ?? null,
     asistencia_2: calificacion?.asistencia_2 ?? null,
@@ -199,9 +216,27 @@ function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, saving }) {
     asistencia_5: calificacion?.asistencia_5 ?? null,
     practica_1: calificacion?.practica_1 ?? null,
     practica_2: calificacion?.practica_2 ?? null,
+    extra_1: calificacion?.extra_1 ?? null,
+    extra_2: calificacion?.extra_2 ?? null,
     calificacion_final: calificacion?.calificacion_final ?? null,
   });
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Fix stale data: resync when calificacion prop changes
+  useEffect(() => {
+    setData({
+      asistencia_1: calificacion?.asistencia_1 ?? null,
+      asistencia_2: calificacion?.asistencia_2 ?? null,
+      asistencia_3: calificacion?.asistencia_3 ?? null,
+      asistencia_4: calificacion?.asistencia_4 ?? null,
+      asistencia_5: calificacion?.asistencia_5 ?? null,
+      practica_1: calificacion?.practica_1 ?? null,
+      practica_2: calificacion?.practica_2 ?? null,
+      extra_1: calificacion?.extra_1 ?? null,
+      extra_2: calificacion?.extra_2 ?? null,
+      calificacion_final: calificacion?.calificacion_final ?? null,
+    });
+  }, [calificacion]);
 
   const handleChange = (campo, valor) => {
     setData({ ...data, [campo]: valor === '' ? null : valor });
@@ -213,19 +248,17 @@ function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, saving }) {
     setHasChanges(false);
   };
 
-  const getInputClass = (valor) => {
-    if (valor === null || valor === undefined || valor === '') return 'text-gray-400';
-    const val = parseFloat(valor);
-    if (isNaN(val)) return 'text-gray-400';
-    if (campo.includes('asistencia_')) {
-      return val === 1 ? 'text-green-600' : 'text-red-500';
-    }
-    return val >= 13 ? 'text-green-600 font-bold' : 'text-red-500';
-  };
+  function getInputClass(fieldName, value) {
+    const base = "w-14 px-1 py-1 text-center rounded border border-gray-300 text-sm";
+    if (!fieldName) return base;
+    if (value === null || value === undefined || value === '') return base + " text-gray-400";
+    // usa getGradeClass de utils/grades para consistencia visual
+    return `${base} ${getGradeClass(value)}`;
+  }
 
   return (
     <tr className="border-b border-gray-100">
-      <td className="py-2 px-2">
+      <td className="py-2 px-2 sticky left-0 bg-white z-10">
         <div>
           <p className="font-medium text-gray-800">
             {alumno.nombre} {alumno.apellido_paterno} {alumno.apellido_materno}
@@ -260,26 +293,38 @@ function AlumnoRow({ alumno, calificacion, puedeEditar, onSave, saving }) {
               step="0.1"
               value={data[campo] ?? ''}
               onChange={(e) => handleChange(campo, e.target.value)}
-              className="w-14 px-1 py-1 text-center rounded border border-gray-300 text-sm"
+              className={getInputClass(campo, data[campo])}
               disabled={!puedeEditar}
             />
           ) : (
-            <span className="text-sm font-medium">
+            <span className={`text-sm font-medium ${getGradeClass(data[campo])}`}>
               {data[campo] ?? '-'}
             </span>
           )}
         </td>
       ))}
       <td className="py-2 px-2 text-center">
-        {hasChanges && puedeEditar && (
-          <button
-            onClick={handleGuardar}
-            disabled={saving}
-            className="px-2 py-1 bg-primary-500 text-white rounded text-sm hover:bg-primary-600"
-          >
-            <Save size={14} />
-          </button>
-        )}
+        <div className="flex items-center justify-center gap-2">
+          {isSaving ? (
+            <span className="inline-flex items-center gap-1 text-primary-500 text-xs whitespace-nowrap">
+              <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary-500 border-t-transparent" />
+              Guardando...
+            </span>
+          ) : hasChanges && puedeEditar ? (
+            <button
+              onClick={handleGuardar}
+              disabled={isSaving}
+              className="px-2 py-1 bg-primary-500 text-white rounded text-sm hover:bg-primary-600"
+            >
+              <Save size={14} />
+            </button>
+          ) : isSaved ? (
+            <span className="inline-flex items-center gap-1 text-green-600 text-xs whitespace-nowrap">
+              <CheckCircle size={14} />
+              Guardado
+            </span>
+          ) : null}
+        </div>
       </td>
     </tr>
   );

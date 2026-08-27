@@ -15,9 +15,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Request to:', config.url, 'Token exists:', !!token);
+      // Token attached
     } else {
-      console.log('Request to:', config.url, 'NO token');
+      // No token — request will be unauthenticated
     }
     return config;
   },
@@ -26,18 +26,16 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - just pass through, NO auto-logout
+// Response interceptor - handle 401 and redirect to login
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
-    // Just log and reject - don't modify localStorage
-    const status = error.response?.status;
-    const url = error.config?.url;
-    console.log('API Error:', status, 'URL:', url);
-    if (status === 401) {
-      console.log('Got 401 - token may be invalid');
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }

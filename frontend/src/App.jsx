@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToasterProvider } from './components/ui/Toast';
 
@@ -8,6 +9,8 @@ import Layout from './components/layout/Layout';
 // Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -17,11 +20,17 @@ import AdminMaterias from './pages/admin/Materias';
 import AdminCalificaciones from './pages/admin/Calificaciones';
 import AdminPagos from './pages/admin/Pagos';
 import AdminExport from './pages/admin/Export';
+import AdminSettings from './pages/admin/Settings';
 import AdminProfesores from './pages/admin/Profesores';
 import AdminGrupos from './pages/admin/Grupos';
 import AdminAsignaciones from './pages/admin/Asignaciones';
 import AdminAdmins from './pages/admin/Admins';
 import AdminRequisitos from './pages/admin/Requisitos';
+// Lazy-loaded heavy pages — split to reduce initial bundle
+// TODO S3: virtualización con tanstack-virtual para tablas grandes (Importar preview)
+// See frontend/src/hooks/useImport.js and components/import/ImportSteps.jsx placeholders
+const AdminImportar = lazy(() => import('./pages/admin/Importar'));
+const AdminBoletas = lazy(() => import('./pages/admin/Boletas'));
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
@@ -49,8 +58,8 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRole && user.type !== allowedRole) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
+  if (allowedRole && user?.rol !== allowedRole) {
+    return <Navigate to={`/${user.rol}`} replace />;
   }
 
   return children;
@@ -69,7 +78,7 @@ function PublicRoute({ children }) {
   }
 
   if (user) {
-    return <Navigate to={user.type === 'admin' ? '/admin' : user.type === 'profesor' ? '/profesor' : '/alumno'} replace />;
+    return <Navigate to={`/${user.rol}`} replace />;
   }
 
   return children;
@@ -80,6 +89,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToasterProvider>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div></div>}>
           <Routes>
             {/* Public Routes */}
             <Route
@@ -90,11 +100,37 @@ function App() {
                 </PublicRoute>
               }
             />
+            {/* Hidden invite-only registration — no public signup. Disallow: /r/ in robots.txt */}
+            {/* meta noindex,nofollow is injected by Register component via useEffect for /r/* routes */}
             <Route
-              path="/signup"
+              path="/r/a/:token"
               element={
                 <PublicRoute>
-                  <Register />
+                  <Register role="alumno" />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/r/p/:token"
+              element={
+                <PublicRoute>
+                  <Register role="profesor" />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicRoute>
+                  <ForgotPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
                 </PublicRoute>
               }
             />
@@ -117,9 +153,12 @@ function App() {
               <Route path="profesores" element={<AdminProfesores />} />
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
+              <Route path="importar" element={<AdminImportar />} />
+              <Route path="boletas" element={<AdminBoletas />} />
               <Route path="admins" element={<AdminAdmins />} />
-              <Route path="requisitos" element={<AdminRequisitos />} />
+              {/* <Route path="requisitos" element={<AdminRequisitos />} /> */}
               <Route path="exportar" element={<AdminExport />} />
+              <Route path="configuracion" element={<AdminSettings />} />
             </Route>
 
             {/* Alumno Routes */}
@@ -154,6 +193,7 @@ function App() {
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
+          </Suspense>
         </ToasterProvider>
       </AuthProvider>
     </BrowserRouter>

@@ -2,7 +2,7 @@
 Rutas para gestión de Pagos (Notas de Remisión)
 """
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, NotaRemision, Alumno, Admin
@@ -12,18 +12,15 @@ pagos_bp = Blueprint('pagos', __name__)
 
 
 @pagos_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_alumno_pagos(alumno_id):
     """
     Obtiene todas las notas de remisión de un alumno
     """
-    # Verificar permisos (si hay JWT)
-    try:
-        identity = get_jwt_identity()
-        if identity and identity.get('type') == 'alumno' and identity['id'] != alumno_id:
-            return jsonify({'error': 'No tienes permiso para ver estos pagos'}), 403
-    except:
-        pass
+    # Verificar permisos
+    claims = get_jwt()
+    if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
+        return jsonify({'error': 'No tienes permiso para ver estos pagos'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
     
@@ -55,7 +52,7 @@ def get_alumno_pagos(alumno_id):
 
 
 @pagos_bp.route('', methods=['POST'])
-# @admin_required
+@admin_required
 def create_nota():
     """
     Crea una nueva nota de remisión (admin)
@@ -75,16 +72,13 @@ def create_nota():
         return jsonify({'error': 'El monto es requerido'}), 400
     
     # Verificar que el alumno exista
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
     
-    # Intentar obtener el admin (si no hay JWT, usar admin con id=1)
-    try:
-        identity = get_jwt_identity()
-        created_by_id = identity.get('id', 1) if identity else 1
-    except:
-        created_by_id = 1
+    # Obtener el admin actual del JWT
+    claims = get_jwt()
+    created_by_id = claims.get('id', 1)
     
     try:
         fecha_emision = datetime.utcnow().date()
@@ -168,8 +162,8 @@ def get_nota(id):
     """
     nota = NotaRemision.query.get_or_404(id)
     
-    identity = get_jwt_identity()
-    if identity.get('type') == 'alumno' and identity['id'] != nota.alumno_id:
+    claims = get_jwt()
+    if claims.get('type') == 'alumno' and claims['id'] != nota.alumno_id:
         return jsonify({'error': 'No tienes permiso para ver esta nota'}), 403
     
     return jsonify({'nota': nota.to_dict()}), 200
@@ -195,7 +189,7 @@ def delete_nota(id):
 
 
 @pagos_bp.route('/toggle-pagado/<int:id>', methods=['PATCH'])
-# @admin_required
+@admin_required
 def toggle_pagado(id):
     """
     Cambia el estado de pagado/no pagado de una nota (admin)
@@ -295,7 +289,10 @@ def get_all_notas():
     Lista todas las notas con filtros (admin)
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except:
+        per_page = 20
     pagada = request.args.get('pagada')
     search = request.args.get('search', '')
     
@@ -329,7 +326,7 @@ def get_all_notas():
 
 
 @pagos_bp.route('/alumnos-pendientes', methods=['GET'])
-# @admin_required
+@admin_required
 def get_alumnos_pendientes():
     """
     Lista alumnos con pagos pendientes y su total

@@ -1,9 +1,10 @@
 """
 Rutas para gestión de Grupos
 """
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required
 
+from sqlalchemy.orm import joinedload
 from models import db, Grupo, GrupoIntegrante, Alumno, Carrera
 from utils.decorators import admin_required
 
@@ -11,31 +12,46 @@ grupos_bp = Blueprint('grupos', __name__)
 
 
 @grupos_bp.route('', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_grupos():
     """
     Obtiene todos los grupos
+    Query params:
+        - carrera_id: filtrar por carrera
+        - activo: true/false para filtrar por status
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
     carrera_id = request.args.get('carrera_id', type=int)
     activo = request.args.get('activo')
+    page = request.args.get('page', 1, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
-    query = Grupo.query
+    query = Grupo.query.options(joinedload(Grupo.carrera))
     
     if carrera_id:
         query = query.filter_by(carrera_id=carrera_id)
     if activo is not None:
         query = query.filter_by(activo=activo.lower() == 'true')
     
-    grupos = query.order_by(Grupo.nombre).all()
+    pagination = query.order_by(Grupo.nombre).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     
     return jsonify({
-        'grupos': [g.to_dict() for g in grupos],
-        'total': len(grupos)
+        'grupos': [g.to_dict() for g in pagination.items],
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
     }), 200
 
 
 @grupos_bp.route('/<int:grupo_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_grupo(grupo_id):
     """
     Obtiene un grupo por ID con sus integrantes
@@ -49,7 +65,8 @@ def get_grupo(grupo_id):
 
 
 @grupos_bp.route('', methods=['POST'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def create_grupo():
     """
     Crea un nuevo grupo
@@ -66,7 +83,7 @@ def create_grupo():
             return jsonify({'error': f'El campo {field} es requerido'}), 400
     
     # Verificar carrera existe
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'Carrera no encontrada'}), 404
     
@@ -86,7 +103,12 @@ def create_grupo():
     )
     
     db.session.add(grupo)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error creating grupo: {str(e)}')
+        return jsonify({'error': f'Error al crear grupo: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Grupo creado exitosamente',
@@ -95,7 +117,8 @@ def create_grupo():
 
 
 @grupos_bp.route('/<int:grupo_id>', methods=['PUT'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def update_grupo(grupo_id):
     """
     Actualiza un grupo
@@ -114,16 +137,21 @@ def update_grupo(grupo_id):
     if 'activo' in data:
         grupo.activo = data['activo']
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating grupo: {str(e)}')
+        return jsonify({'error': f'Error al actualizar grupo: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Grupo actualizado exitosamente',
         'grupo': grupo.to_dict()
     }), 200
 
-
 @grupos_bp.route('/<int:grupo_id>', methods=['DELETE'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def delete_grupo(grupo_id):
     """
     Elimina un grupo y sus integrantes
@@ -131,7 +159,12 @@ def delete_grupo(grupo_id):
     grupo = Grupo.query.get_or_404(grupo_id)
     
     db.session.delete(grupo)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error deleting grupo: {str(e)}')
+        return jsonify({'error': f'Error al eliminar grupo: {str(e)}'}), 500
     
     return jsonify({'message': 'Grupo eliminado exitosamente'}), 200
 
@@ -141,14 +174,14 @@ def delete_grupo(grupo_id):
 # ============================================================
 
 @grupos_bp.route('/<int:grupo_id>/integrantes', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_integrantes(grupo_id):
     """
     Obtiene los integrantes de un grupo
     """
-    grupo = Grupo.query.get_or_404(grupo_id)
+    grupo = Grupo.query.options(joinedload(Grupo.carrera)).get_or_404(grupo_id)
     
-    integrantes = grupo.integrantes.all()
+    integrantes = GrupoIntegrante.query.filter_by(grupo_id=grupo_id).options(joinedload(GrupoIntegrante.alumno)).all()
     
     return jsonify({
         'grupo': grupo.to_dict(),
@@ -158,7 +191,8 @@ def get_integrantes(grupo_id):
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes', methods=['POST'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def add_integrante(grupo_id):
     """
     Agrega un alumno al grupo
@@ -171,7 +205,7 @@ def add_integrante(grupo_id):
         return jsonify({'error': 'alumno_id es requerido'}), 400
     
     # Verificar alumno existe
-    alumno = Alumno.query.get(data['alumno_id'])
+    alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'Alumno no encontrado'}), 404
     
@@ -190,7 +224,12 @@ def add_integrante(grupo_id):
     )
     
     db.session.add(integrante)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error adding integrante: {str(e)}')
+        return jsonify({'error': f'Error al agregar integrante: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Integrante agregado exitosamente',
@@ -199,7 +238,8 @@ def add_integrante(grupo_id):
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes/<int:alumno_id>', methods=['DELETE'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def remove_integrante(grupo_id, alumno_id):
     """
     Remueve un integrante del grupo
@@ -210,13 +250,19 @@ def remove_integrante(grupo_id, alumno_id):
     ).first_or_404()
     
     db.session.delete(integrante)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error removing integrante: {str(e)}')
+        return jsonify({'error': f'Error al remover integrante: {str(e)}'}), 500
     
     return jsonify({'message': 'Integrante removido exitosamente'}), 200
 
 
 @grupos_bp.route('/<int:grupo_id>/integrantes/bulk', methods=['POST'])
-# @jwt_required()
+@jwt_required()
+@admin_required
 def add_integrantes_bulk(grupo_id):
     """
     Agrega múltiples alumnos al grupo
@@ -249,7 +295,12 @@ def add_integrantes_bulk(grupo_id):
         db.session.add(integran)
         added.append(aid)
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error adding integrantes bulk: {str(e)}')
+        return jsonify({'error': f'Error al agregar integrantes: {str(e)}'}), 500
     
     return jsonify({
         'message': f'{len(added)} integrantes agregados',

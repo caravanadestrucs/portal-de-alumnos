@@ -1,8 +1,8 @@
 """
 Rutas para gestión de Profesores
 """
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required
 
 from models import db, Profesor
 from utils.decorators import admin_required
@@ -11,28 +11,42 @@ profesores_bp = Blueprint('profesores', __name__)
 
 
 @profesores_bp.route('', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_profesores():
     """
     Obtiene todos los profesores
+    Query params:
+        - activo: true/false para filtrar por status
+        - page: número de página (default 1)
+        - per_page: items por página (default 20)
     """
     activo = request.args.get('activo')
+    page = request.args.get('page', 1, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
     query = Profesor.query
     
     if activo is not None:
         query = query.filter_by(activo=activo.lower() == 'true')
     
-    profesores = query.order_by(Profesor.apellido_paterno).all()
+    pagination = query.order_by(Profesor.apellido_paterno).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
     
     return jsonify({
-        'profesores': [p.to_dict() for p in profesores],
-        'total': len(profesores)
+        'profesores': [p.to_dict() for p in pagination.items],
+        'total': pagination.total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pagination.pages
     }), 200
 
 
 @profesores_bp.route('/<int:profesor_id>', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_profesor(profesor_id):
     """
     Obtiene un profesor por ID
@@ -42,7 +56,7 @@ def get_profesor(profesor_id):
 
 
 @profesores_bp.route('', methods=['POST'])
-# @jwt_required()
+@admin_required
 def create_profesor():
     """
     Crea un nuevo profesor
@@ -79,7 +93,12 @@ def create_profesor():
     profesor.set_password(data['password'])
     
     db.session.add(profesor)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error creating profesor: {str(e)}')
+        return jsonify({'error': f'Error al crear profesor: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Profesor creado exitosamente',
@@ -88,7 +107,7 @@ def create_profesor():
 
 
 @profesores_bp.route('/<int:profesor_id>', methods=['PUT'])
-# @jwt_required()
+@admin_required
 def update_profesor(profesor_id):
     """
     Actualiza un profesor
@@ -124,7 +143,12 @@ def update_profesor(profesor_id):
     if 'password' in data and data['password']:
         profesor.set_password(data['password'])
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating profesor: {str(e)}')
+        return jsonify({'error': f'Error al actualizar profesor: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Profesor actualizado exitosamente',
@@ -133,7 +157,7 @@ def update_profesor(profesor_id):
 
 
 @profesores_bp.route('/<int:profesor_id>', methods=['DELETE'])
-# @jwt_required()
+@admin_required
 def delete_profesor(profesor_id):
     """
     Elimina o desactiva un profesor
@@ -144,13 +168,23 @@ def delete_profesor(profesor_id):
     if profesor.asignaciones.filter_by(activo=True).count() > 0:
         # Desactivar en lugar de eliminar
         profesor.activo = False
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Error deactivating profesor: {str(e)}')
+            return jsonify({'error': f'Error al desactivar profesor: {str(e)}'}), 500
         return jsonify({
             'message': 'Profesor desactivado (tiene asignaciones activas)',
             'profesor': profesor.to_dict()
         }), 200
     
     db.session.delete(profesor)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error deleting profesor: {str(e)}')
+        return jsonify({'error': f'Error al eliminar profesor: {str(e)}'}), 500
     
     return jsonify({'message': 'Profesor eliminado exitosamente'}), 200

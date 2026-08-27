@@ -1,7 +1,7 @@
 import api from './index';
 
 export const getProfesores = async () => {
-  const response = await api.get('/profesores');
+  const response = await api.get(`/profesores`);
   return response.data.profesores || [];
 };
 
@@ -11,7 +11,7 @@ export const getProfesor = async (id) => {
 };
 
 export const createProfesor = async (data) => {
-  const response = await api.post('/profesores', data);
+  const response = await api.post(`/profesores`, data);
   return response.data;
 };
 

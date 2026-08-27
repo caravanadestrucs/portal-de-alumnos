@@ -1,7 +1,7 @@
 import api from './index';
 
 export const getCarreras = async () => {
-  const response = await api.get('/carreras');
+  const response = await api.get(`/carreras`);
   // El backend devuelve { carreras: [...] }
   return response.data.carreras || [];
 };
@@ -12,7 +12,7 @@ export const getCarrera = async (id) => {
 };
 
 export const createCarrera = async (carreraData) => {
-  const response = await api.post('/carreras', carreraData);
+  const response = await api.post(`/carreras`, carreraData);
   return response.data;
 };
 

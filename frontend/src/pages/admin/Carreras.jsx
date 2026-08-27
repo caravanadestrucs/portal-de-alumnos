@@ -3,14 +3,22 @@ import { getCarreras, createCarrera, updateCarrera, deleteCarrera } from '../../
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-import { Plus, Edit, Trash2, GraduationCap } from 'lucide-react';
+import Modal from '../../components/ui/Modal';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { Plus, Edit, Trash2, GraduationCap, Map } from 'lucide-react';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import { getMaterias } from '../../api/materias';
+import CurriculumGraph from '../../components/curriculum/CurriculumGraph';
 
 export default function AdminCarreras() {
   const [carreras, setCarreras] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+  const [modalMode, setModalMode] = useState('create');
   const [selectedCarrera, setSelectedCarrera] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     nombre: '',
     codigo: '',
@@ -18,10 +26,26 @@ export default function AdminCarreras() {
     activa: true,
   });
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const [materias, setMaterias] = useState([]);
+  const [loadingMaterias, setLoadingMaterias] = useState(false);
 
   useEffect(() => {
     loadCarreras();
+    loadMaterias();
   }, []);
+
+  const loadMaterias = async () => {
+    setLoadingMaterias(true);
+    try {
+      const data = await getMaterias().catch(() => []);
+      setMaterias(Array.isArray(data) ? data : []);
+    } catch {
+      setMaterias([]);
+    } finally {
+      setLoadingMaterias(false);
+    }
+  };
 
   const loadCarreras = async () => {
     setLoading(true);
@@ -30,6 +54,7 @@ export default function AdminCarreras() {
       setCarreras(data || []);
     } catch (error) {
       console.error('Error loading carreras:', error);
+      toast.error('Error al cargar carreras');
     } finally {
       setLoading(false);
     }
@@ -38,12 +63,7 @@ export default function AdminCarreras() {
   const openNewModal = () => {
     setModalMode('create');
     setSelectedCarrera(null);
-    setFormData({
-      nombre: '',
-      codigo: '',
-      descripcion: '',
-      activa: true,
-    });
+    setFormData({ nombre: '', codigo: '', descripcion: '', activa: true });
     setShowModal(true);
   };
 
@@ -71,26 +91,32 @@ export default function AdminCarreras() {
     try {
       if (modalMode === 'edit' && selectedCarrera) {
         await updateCarrera(selectedCarrera.id, formData);
+        toast.success('Carrera actualizada exitosamente');
       } else {
         await createCarrera(formData);
+        toast.success('Carrera creada exitosamente');
       }
       closeModal();
       loadCarreras();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar esta carrera?')) {
-      try {
-        await deleteCarrera(id);
-        loadCarreras();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteCarrera(deleteTarget.id);
+      toast.success('Carrera eliminada exitosamente');
+      setDeleteTarget(null);
+      loadCarreras();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -113,14 +139,15 @@ export default function AdminCarreras() {
       {/* Table */}
       <Card>
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-            <p className="mt-4 text-gray-500">Cargando...</p>
-          </div>
+          <TableSkeleton rows={8} columns={5} />
         ) : carreras.length === 0 ? (
           <div className="text-center py-12">
             <GraduationCap size={48} className="mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No hay carreras registradas</p>
+            <p className="text-gray-500 mb-4">No hay carreras registradas</p>
+            <Button onClick={openNewModal} variant="primary">
+              <Plus size={18} />
+              Crear primera carrera
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -155,9 +182,10 @@ export default function AdminCarreras() {
                           <Edit size={16} className="text-blue-600" />
                         </button>
                         <button
-                          onClick={() => handleDelete(carrera.id)}
+                          onClick={() => setDeleteTarget(carrera)}
                           className="p-2 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                           title="Eliminar"
+                          aria-label={`Eliminar carrera ${carrera.nombre}`}
                         >
                           <Trash2 size={16} className="text-red-600" />
                         </button>
@@ -171,187 +199,113 @@ export default function AdminCarreras() {
         )}
       </Card>
 
-      {/* MODAL - Siempre renderizado pero oculto con CSS */}
-      <div 
-        style={{ 
-          display: showModal ? 'flex' : 'none',
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 9999,
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '16px'
-        }}
+      {/* Curriculum Graph — admin ve 45 nodos */}
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Map size={20} className="text-primary-600" />
+          <h2 className="text-xl font-bold text-gray-800">Mapa Curricular</h2>
+          <span className="text-xs text-gray-400 ml-2">
+            {loadingMaterias ? 'cargando…' : `${materias.length} materias · 9 cuatrimestres`}
+          </span>
+        </div>
+        {loadingMaterias ? (
+          <TableSkeleton rows={3} columns={9} />
+        ) : materias.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">No hay materias para mostrar</p>
+        ) : (
+          <CurriculumGraph materias={materias} onMateriaClick={() => {}} />
+        )}
+      </Card>
+
+      {/* Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={modalMode === 'edit' ? 'Editar Carrera' : 'Nueva Carrera'}
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={closeModal}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" loading={saving} form="carrera-form">
+              {modalMode === 'edit' ? 'Guardar Cambios' : 'Crear Carrera'}
+            </Button>
+          </>
+        }
       >
-        <div 
-          style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            width: '100%',
-            maxWidth: '500px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            overflow: 'hidden'
-          }}
-        >
-          {/* Header */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '20px 24px',
-            borderBottom: '1px solid #e5e7eb'
-          }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>
-              {modalMode === 'edit' ? 'Editar Carrera' : 'Nueva Carrera'}
-            </h2>
-            <button
-              onClick={closeModal}
-              style={{
-                padding: '8px',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer'
-              }}
-            >
-              ✕
-            </button>
+        <form id="carrera-form" onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              value={formData.nombre}
+              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Ej: Ingeniería en Sistemas"
+            />
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit}>
-            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Nombre */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-                  Nombre *
-                </label>
-                <input
-                  type="text"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #d1d5db',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  placeholder="Ej: Ingeniería en Sistemas"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Código *
+            </label>
+            <input
+              type="text"
+              value={formData.codigo}
+              onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Ej: ING-SIS"
+            />
+          </div>
 
-              {/* Código */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-                  Código *
-                </label>
-                <input
-                  type="text"
-                  value={formData.codigo}
-                  onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #d1d5db',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  placeholder="Ej: ING-SIS"
-                />
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              value={formData.descripcion}
+              onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              placeholder="Descripción de la carrera..."
+            />
+          </div>
 
-              {/* Descripción */}
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-                  Descripción
-                </label>
-                <textarea
-                  value={formData.descripcion}
-                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #d1d5db',
-                    fontSize: '14px',
-                    outline: 'none',
-                    resize: 'none'
-                  }}
-                  placeholder="Descripción de la carrera..."
-                />
-              </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="activa"
+              checked={formData.activa}
+              onChange={(e) => setFormData({ ...formData, activa: e.target.checked })}
+              className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <label htmlFor="activa" className="text-sm font-medium text-gray-700">
+              Carrera activa
+            </label>
+          </div>
+        </form>
+      </Modal>
 
-              {/* Checkbox activa */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  id="activa"
-                  checked={formData.activa}
-                  onChange={(e) => setFormData({ ...formData, activa: e.target.checked })}
-                  style={{ width: '18px', height: '18px' }}
-                />
-                <label htmlFor="activa" style={{ fontSize: '14px', fontWeight: '500', color: '#374151' }}>
-                  Carrera activa
-                </label>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              padding: '16px 24px',
-              borderTop: '1px solid #e5e7eb',
-              backgroundColor: '#f9fafb'
-            }}>
-              <button
-                type="button"
-                onClick={closeModal}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  border: '1px solid #d1d5db',
-                  backgroundColor: 'white',
-                  color: '#374151',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: saving ? '#9ca3af' : 'linear-gradient(135deg, #008a8a 0%, #00d084 100%)',
-                  color: 'white',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: saving ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {saving ? 'Guardando...' : (modalMode === 'edit' ? 'Guardar Cambios' : 'Crear Carrera')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar carrera"
+        message={deleteTarget ? `¿Eliminar la carrera ${deleteTarget.nombre}?` : '¿Eliminar esta carrera?'}
+        impactSummary={
+          deleteTarget
+            ? `Se eliminarán ${deleteTarget.materiasCount ?? 45} materias, ${deleteTarget.alumnosCount ?? 0} alumnos y todas sus calificaciones/pagos asociados. Esta acción no se puede deshacer.`
+            : 'Se eliminarán materias, alumnos y todas sus calificaciones/pagos asociados. Esta acción no se puede deshacer.'
+        }
+        requireConfirmText="BORRAR"
+        confirmText="Borrar carrera"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

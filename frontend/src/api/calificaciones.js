@@ -7,7 +7,7 @@ export const getCalificacionesByAlumno = async (alumnoId) => {
 };
 
 export const createCalificacion = async (calificacionData) => {
-  const response = await api.post('/calificaciones', calificacionData);
+  const response = await api.post(`/calificaciones`, calificacionData);
   return response.data;
 };
 
@@ -20,3 +20,5 @@ export const getHistorial = async (alumnoId) => {
   const response = await api.get(`/calificaciones/alumnos/${alumnoId}`);
   return response.data;
 };
+
+export const bulkUpdateCalificaciones = (payload) => api.put('/calificaciones/bulk', { calificaciones: payload });

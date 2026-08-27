@@ -1,12 +1,21 @@
 """
 Rutas para gestión de Alumnos
 """
+import os
+import secrets
+import string
+import logging
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
+from flask_jwt_extended import jwt_required, get_jwt
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash
 
-from models import db, Alumno, Carrera, Calificacion
+from models import db, Alumno, Carrera, Materia, Calificacion
 from utils.decorators import admin_required, get_admin_or_403
+from extensions import limiter
+from utils.mail import send_credentials_email
+
+logger = logging.getLogger(__name__)
 
 alumnos_bp = Blueprint('alumnos', __name__)
 
@@ -28,7 +37,10 @@ def list_alumnos():
     carrera_id = request.args.get('carrera_id', type=int)
     activo = request.args.get('activo')
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    try:
+        per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
+    except ValueError:
+        per_page = 20
     
     # Query base
     query = Alumno.query
@@ -97,7 +109,7 @@ def create_alumno():
         return jsonify({'error': 'El email ya existe'}), 409
     
     # Verificar que la carrera exista
-    carrera = Carrera.query.get(data['carrera_id'])
+    carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'La carrera especificada no existe'}), 404
     
@@ -115,6 +127,30 @@ def create_alumno():
         alumno.set_password(data['password'])
         
         db.session.add(alumno)
+        db.session.flush()  # Obtener el ID del alumno
+        
+        # Crear boletas (calificaciones) para todas las materias de su carrera
+        materias = Materia.query.filter_by(carrera_id=data['carrera_id']).all()
+        periodo_actual = f"Enero-Abril {datetime.now().year}"
+        for materia in materias:
+            calif = Calificacion(
+                alumno_id=alumno.id,
+                materia_id=materia.id,
+                asistencia_1=0,
+                asistencia_2=0,
+                asistencia_3=0,
+                asistencia_4=0,
+                asistencia_5=0,
+                practica_1=0,
+                practica_2=0,
+                extra_1=0,
+                extra_2=0,
+                calificacion_final=0,
+                periodo=periodo_actual,
+                anio=datetime.now().year
+            )
+            db.session.add(calif)
+        
         db.session.commit()
         
         return jsonify({
@@ -133,11 +169,11 @@ def get_alumno(id):
     """
     Obtiene un alumno por ID (admin o el propio alumno)
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     alumno = Alumno.query.get_or_404(id)
     
     # Verificar permisos: solo el admin o el propio alumno pueden ver
-    if identity.get('type') == 'alumno' and identity['id'] != id:
+    if claims.get('type') == 'alumno' and claims['id'] != id:
         return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
     
     return jsonify({'alumno': alumno.to_dict()}), 200
@@ -177,7 +213,7 @@ def update_alumno(id):
         if 'carrera_id' in data:
             nueva_carrera_id = int(data['carrera_id'])
             if nueva_carrera_id != alumno.carrera_id:
-                carrera = Carrera.query.get(nueva_carrera_id)
+                carrera = db.session.get(Carrera, nueva_carrera_id)
                 if not carrera:
                     return jsonify({'error': 'La carrera especificada no existe'}), 404
                 alumno.carrera_id = nueva_carrera_id
@@ -254,12 +290,12 @@ def mis_datos():
     """
     Obtiene los datos del alumno logueado (alumno only)
     """
-    identity = get_jwt_identity()
+    claims = get_jwt()
     
-    if identity.get('type') != 'alumno':
+    if claims.get('type') != 'alumno':
         return jsonify({'error': 'Solo alumnos pueden acceder a esta ruta'}), 403
     
-    alumno = Alumno.query.get_or_404(identity['id'])
+    alumno = Alumno.query.get_or_404(claims['id'])
     
     # Incluir estadísticas
     num_calificaciones = alumno.calificaciones.count()
@@ -274,6 +310,111 @@ def mis_datos():
             'practicas_completadas': practicas_completadas
         }
     }), 200
+
+
+def _generate_temp_password() -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(8))
+
+
+@alumnos_bp.route('/send-credentials', methods=['POST'])
+@admin_required
+@limiter.limit("20/minute")
+def send_credentials():
+    """
+    POST /api/alumnos/send-credentials
+    Body: {ids: [7,12], alumno_ids: [7,12], reset_password: bool}
+    Rate: 20/min per admin IP+user
+    Returns 200 with results or 207 if partial failures.
+    """
+    data = request.get_json(silent=True) or {}
+    # Support both ids and alumno_ids for compat
+    ids = data.get("ids")
+    if ids is None:
+        ids = data.get("alumno_ids")
+    if ids is None:
+        ids = data.get("alumnoIds")
+
+    if not ids or not isinstance(ids, list) or len(ids) == 0:
+        return jsonify({"error": "ids required", "code": "IDS_REQUIRED"}), 400
+
+    # Validate all ids are ints
+    try:
+        ids = [int(x) for x in ids]
+    except (ValueError, TypeError):
+        return jsonify({"error": "ids must be integers"}), 400
+
+    reset_password = data.get("reset_password", True)
+    # Feature flag
+    try:
+        from flask import current_app
+        if not current_app.config.get("BULK_EMAIL_ENABLED", True):
+            return jsonify({"error": "bulk email disabled"}), 403
+    except Exception:
+        pass
+
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+    login_url = f"{frontend_url}/login"
+
+    results = []
+    enviados = 0
+    fallidos = 0
+
+    for alumno_id in ids:
+        alumno = db.session.get(Alumno, alumno_id)
+        if not alumno:
+            results.append({"id": alumno_id, "status": "failed", "error": "Alumno not found", "email": None})
+            fallidos += 1
+            continue
+
+        temp_pw = _generate_temp_password()
+        # Hash and store — never log plaintext
+        try:
+            # Generate hash
+            hashed = generate_password_hash(temp_pw)
+            # Store in dedicated temp cols + overwrite password_hash for login
+            if hasattr(alumno, "temp_password_hash"):
+                alumno.temp_password_hash = hashed
+                alumno.temp_password_expires_at = datetime.utcnow() + timedelta(hours=24)
+                alumno.must_change_password = True
+            # Also set main password so check_password works
+            alumno.set_password(temp_pw)
+            # Ensure expiry is set even if temp cols missing (fallback)
+            if hasattr(alumno, "temp_password_expires_at") and not alumno.temp_password_expires_at:
+                alumno.temp_password_expires_at = datetime.utcnow() + timedelta(hours=24)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to set temp password for alumno {alumno_id}: {str(e)}")
+            results.append({"id": alumno_id, "email": alumno.email, "status": "failed", "error": "Failed to set password"})
+            fallidos += 1
+            continue
+
+        # Send email per alumno
+        try:
+            res = send_credentials_email(alumno.email, temp_pw, alumno.nombre_completo, login_url)
+            if res.get("success"):
+                results.append({"id": alumno_id, "email": alumno.email, "status": "sent"})
+                enviados += 1
+            else:
+                results.append({"id": alumno_id, "email": alumno.email, "status": "failed", "error": res.get("error", "SMTP error")})
+                fallidos += 1
+        except Exception as e:
+            logger.error(f"Send email failed for {alumno.email}: {str(e)}")
+            results.append({"id": alumno_id, "email": alumno.email, "status": "failed", "error": str(e)})
+            fallidos += 1
+
+    total = len(ids)
+    body = {
+        "results": results,
+        "enviados": enviados,
+        "fallidos": fallidos,
+        "total": total,
+    }
+    # 207 if partial, 200 if all sent, 200 also if all failed? Use 207 for partial
+    if fallidos > 0 and enviados > 0:
+        return jsonify(body), 207
+    return jsonify(body), 200
 
 
 @alumnos_bp.route('/stats', methods=['GET'])

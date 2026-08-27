@@ -6,12 +6,12 @@ export const getPracticasByAlumno = async (alumnoId) => {
 };
 
 export const getAllPracticas = async () => {
-  const response = await api.get('/practicas');
+  const response = await api.get(`/practicas`);
   return response.data;
 };
 
 export const createPractica = async (data) => {
-  const response = await api.post('/practicas', data);
+  const response = await api.post(`/practicas`, data);
   return response.data;
 };
 

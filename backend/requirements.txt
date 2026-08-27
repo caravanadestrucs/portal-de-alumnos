@@ -5,7 +5,11 @@ flask-jwt-extended
 sqlalchemy
 flask-sqlalchemy
 flask-migrate
-bcrypt
+pymysql
+flask-limiter
 openpyxl
 gunicorn
 
+pytest
+pytest-cov
+httpx

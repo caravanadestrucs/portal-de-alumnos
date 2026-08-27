@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import { Mail, Lock, AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +21,8 @@ export default function Login() {
 
     try {
       const user = await login(email, password);
-      navigate(user.type === 'admin' ? '/admin' : '/alumno');
+      const routes = { admin: '/admin', alumno: '/alumno', profesor: '/profesor' };
+      navigate(routes[user.rol || user.type] || '/');
     } catch (err) {
       setError(err.response?.data?.message || 'Credenciales inválidas');
     } finally {
@@ -55,35 +57,48 @@ export default function Login() {
           </h2>
 
           {error && (
-            <div className="flex items-center gap-2 p-4 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="flex items-center gap-2 p-4 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600"
+            >
               <AlertCircle size={18} />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="relative">
-              <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Correo electrónico"
-                required
-                className="w-full pl-10 pr-4 py-3 rounded-xl input-glass"
-              />
-            </div>
+            <Input
+              label="Correo electrónico"
+              type="email"
+              id="login-email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
+            />
 
             <div className="relative">
-              <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="password"
+              <Input
+                label="Contraseña"
+                type={showPassword ? 'text' : 'password'}
+                id="login-password"
+                autoComplete="current-password"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Contraseña"
-                required
-                className="w-full pl-10 pr-4 py-3 rounded-xl input-glass"
+                placeholder="••••••••"
+                className="pr-10"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                className="absolute right-3 bottom-3 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
 
             <Button
@@ -96,12 +111,12 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <Link
-              to="/signup"
+              to="/forgot-password"
               className="text-sm text-primary-600 hover:text-primary-700 hover:underline"
             >
-              ¿No tienes cuenta? Regístrate aquí
+              ¿Olvidaste tu contraseña?
             </Link>
           </div>
         </div>

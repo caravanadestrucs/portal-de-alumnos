@@ -39,3 +39,5 @@ build/
 
 # Docker
 docker-compose.override.yml
+# Local AI runtime state
+.atl/

@@ -1,3 +1,4 @@
+@import './components/ui/focus.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -23,7 +24,7 @@
 
 /* Gradient button */
 .btn-gradient {
-  background: linear-gradient(135deg, #008a8a 0%, #00d084 100%);
+  background: linear-gradient(135deg, #008a8a 0%, #00d084 100%); /* tokens: primary #008a8a */
   color: white;
   transition: all 0.3s ease;
 }
@@ -182,17 +183,6 @@
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
     transform: translateX(20px);
   }
   to {
@@ -227,4 +217,9 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #007777;
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .glass { background: rgba(255,255,255,0.95); backdrop-filter: none; }
+  .glass-dark { background: rgba(0,77,77,0.98); backdrop-filter: none; }
 }

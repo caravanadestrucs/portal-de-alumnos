@@ -7,12 +7,12 @@ export const getPagosByAlumno = async (alumnoId) => {
 };
 
 export const getAlumnosConPagosPendientes = async () => {
-  const response = await api.get('/pagos/alumnos-pendientes');
+  const response = await api.get(`/pagos/alumnos-pendientes`);
   return response.data;
 };
 
 export const createPago = async (pagoData) => {
-  const response = await api.post('/pagos', pagoData);
+  const response = await api.post(`/pagos`, pagoData);
   return response.data.nota;
 };
 

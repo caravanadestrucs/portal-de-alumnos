@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useFetch } from '../../hooks/useFetch';
 import * as alumnosApi from '../../api/alumnos';
 import * as practicasApi from '../../api/practicas';
@@ -6,16 +6,23 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Input from '../../components/ui/Input';
+import { useToast } from '../../components/ui/Toast';
 import { Search, Save, X, Edit2, Check, Clock } from 'lucide-react';
 
 export default function AdminRequisitos() {
-  const { data: alumnos, refetch } = useFetch(alumnosApi.getAlumnos);
+  const fetchAllAlumnos = useCallback(
+    () => alumnosApi.getAlumnos({ per_page: 200 }),
+    []
+  );
+  const { data: alumnosResponse, refetch } = useFetch(fetchAllAlumnos);
+  const alumnos = alumnosResponse?.alumnos || [];
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAlumno, setSelectedAlumno] = useState(null);
   const [practicas, setPracticas] = useState([]);
   const [loadingPracticas, setLoadingPracticas] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editando, setEditando] = useState(false);
+  const toast = useToast();
 
   // Form data
   const [formData, setFormData] = useState({
@@ -98,9 +105,9 @@ export default function AdminRequisitos() {
 
       setEditando(false);
       refetch();
-      alert('Datos guardados exitosamente');
+      toast.success('Datos guardados exitosamente');
     } catch (error) {
-      alert(error.response?.data?.message || 'Error al guardar');
+      toast.error(error.response?.data?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }

@@ -22,5 +22,5 @@ RUN mkdir -p /app/instance && chmod 777 /app/instance
 # Exponer el puerto
 EXPOSE 5000
 
-# Comando directo (sin script externo para evitar problemas de permisos)
-ENTRYPOINT ["sh", "-c", "mkdir -p /app/instance && chmod 777 /app/instance && gunicorn -b 0.0.0.0:5000 --access-logfile - --error-logfile - app:app"]
+# Si el volumen esta vacio, restaura la DB pusheada (seed)
+ENTRYPOINT ["sh", "-c", "mkdir -p /app/instance && chmod 777 /app/instance && if [ ! -s /app/instance/portal.db ] && [ -f /app/backend_seed.db ]; then cp /app/backend_seed.db /app/instance/portal.db && echo '[DB] Seeded portal.db from image'; fi && gunicorn -b 0.0.0.0:5000 --access-logfile - --error-logfile - app:app"]

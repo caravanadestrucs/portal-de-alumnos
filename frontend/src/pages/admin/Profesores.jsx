@@ -3,6 +3,9 @@ import { getProfesores, createProfesor, updateProfesor, deleteProfesor } from '.
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import { TableSkeleton } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, UserCheck, Users } from 'lucide-react';
 
 export default function AdminProfesores() {
@@ -22,6 +25,9 @@ export default function AdminProfesores() {
     activo: true,
   });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const toast = useToast();
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -95,20 +101,24 @@ export default function AdminProfesores() {
       closeModal();
       loadProfesores();
     } catch (error) {
-      alert(error.response?.data?.error || 'Error al guardar');
+      toast.error(error.response?.data?.error || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('¿Estás seguro de eliminar este professor?')) {
-      try {
-        await deleteProfesor(id);
-        loadProfesores();
-      } catch (error) {
-        alert(error.response?.data?.error || 'Error al eliminar');
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteProfesor(deleteTarget.id);
+      toast.success('Profesor eliminado');
+      setDeleteTarget(null);
+      loadProfesores();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -158,9 +168,8 @@ export default function AdminProfesores() {
 
       {/* Table */}
       {loading ? (
-        <Card className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-500">Cargando profesores...</p>
+        <Card>
+          <TableSkeleton rows={8} columns={6} />
         </Card>
       ) : filteredProfesores.length === 0 ? (
         <Card className="text-center py-12">
@@ -171,6 +180,12 @@ export default function AdminProfesores() {
           <p className="text-sm text-gray-400 mt-1">
             Crea el primer profesor para comenzar
           </p>
+          <div className="mt-4">
+            <Button onClick={openNewModal}>
+              <Plus size={18} />
+              Crear primer profesor
+            </Button>
+          </div>
         </Card>
       ) : (
         <Card>
@@ -239,8 +254,9 @@ export default function AdminProfesores() {
                           <Edit size={18} className="text-primary-500" />
                         </button>
                         <button
-                          onClick={() => handleDelete(profesor.id)}
+                          onClick={() => setDeleteTarget(profesor)}
                           className="p-2 hover:bg-red-50 rounded-lg transition-colors"
+                          aria-label={`Eliminar profesor ${profesor.nombre}`}
                         >
                           <Trash2 size={18} className="text-red-500" />
                         </button>
@@ -417,6 +433,22 @@ export default function AdminProfesores() {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar profesor"
+        message={
+          deleteTarget
+            ? `¿Eliminar a ${deleteTarget.nombre} ${deleteTarget.apellido_paterno || ''} (${deleteTarget.numero_empleado})?`
+            : '¿Eliminar este profesor?'
+        }
+        impactSummary="Se eliminarán sus asignaciones y calificaciones asociadas. Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

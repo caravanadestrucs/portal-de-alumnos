@@ -5,11 +5,16 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import { getMisDatos } from '../../api/alumnos';
 import { getPagosByAlumno } from '../../api/pagos';
-import { FileText, CreditCard, GraduationCap, User, TrendingUp } from 'lucide-react';
+import { getCalificacionesByAlumno } from '../../api/calificaciones';
+import { getEffectiveGrade, getGradeClass } from '../../utils/grades';
+import { FileText, CreditCard, GraduationCap, User, TrendingUp, HelpCircle } from 'lucide-react';
+import OnboardingTour, { ONBOARDING_STORAGE_KEY } from '../../components/onboarding/OnboardingTour';
+import Button from '../../components/ui/Button';
 
 export default function AlumnoDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [showTour, setShowTour] = useState(false);
   const [stats, setStats] = useState({
     promedio: null,
     practicasCompletadas: 0,
@@ -18,14 +23,37 @@ export default function AlumnoDashboard() {
   });
 
   useEffect(() => {
+    if (user?.rol === 'alumno' && !localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      // small delay to ensure dashboard mounted — matches spec: dashboard mounts then tour appears
+      const t = setTimeout(() => setShowTour(true), 300);
+      return () => clearTimeout(t);
+    }
+  }, [user]);
+
+  useEffect(() => {
     const loadStats = async () => {
       try {
         // Load pagos for the current alumno
         const pagos = await getPagosByAlumno(user?.id).catch(() => []);
-        
+
         if (Array.isArray(pagos)) {
           const pending = pagos.filter(p => !p.pagada).length;
           setStats(prev => ({ ...prev, pagosPendientes: pending }));
+        }
+
+        // Load calificaciones para calcular promedio — fix stats.promedio nunca se setea + NaN
+        const calificaciones = await getCalificacionesByAlumno(user?.id).catch(() => []);
+        if (Array.isArray(calificaciones) && calificaciones.length > 0) {
+          const filtered = calificaciones.filter(c => {
+            const eff = getEffectiveGrade(c);
+            return eff.value != null && eff.value !== "" && Number(eff.value) > 0;
+          });
+          const promedio = filtered.length
+            ? filtered.reduce((s, c) => s + Number(getEffectiveGrade(c).value), 0) / filtered.length
+            : null;
+          setStats(prev => ({ ...prev, promedio: promedio != null ? Number(promedio.toFixed(2)) : null }));
+        } else {
+          setStats(prev => ({ ...prev, promedio: null }));
         }
       } catch (error) {
         console.error('Error loading stats:', error);
@@ -156,7 +184,7 @@ export default function AlumnoDashboard() {
           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
             <User size={20} className="text-primary-600" />
           </div>
-          <div>
+          <div className="flex-1">
             <h4 className="font-semibold text-gray-800 mb-1">
               ¿Necesitas ayuda?
             </h4>
@@ -164,9 +192,23 @@ export default function AlumnoDashboard() {
               Si tienes alguna duda sobre tus calificaciones, pagos o requisitos,
               contacta al departamento académico. Estamos para ayudarte.
             </p>
+            <button
+              onClick={() => setShowTour(true)}
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700"
+            >
+              <HelpCircle size={16} />
+              Ver tour de nuevo
+            </button>
           </div>
         </div>
       </Card>
+
+      <OnboardingTour
+        isOpen={showTour}
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+        onClose={() => setShowTour(false)}
+      />
     </div>
   );
 }

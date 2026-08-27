@@ -1,0 +1,8 @@
+Total alumnos: 56
+  Ingeniería en Sistemas Computacionales: 1
+  Licenciatura en Ciencias del Deporte: 3
+  Licenciatura en Contaduría: 2
+  Licenciatura en Derecho: 8
+  Licenciatura en Enfermería: 13
+  Licenciatura en Pedagogía: 27
+  Licenciatura en Psicología: 2

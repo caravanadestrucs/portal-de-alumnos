@@ -1,14 +1,35 @@
 import { useState } from 'react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import Select from '../../components/ui/Select';
+import { useToast } from '../../components/ui/Toast';
 import { Download, FileText, Database, FileSpreadsheet } from 'lucide-react';
+import { downloadExcel, downloadSQL } from '../../api/export';
 
 export default function AdminExport() {
   const [loading, setLoading] = useState(null);
+  const [filtros, setFiltros] = useState({ carrera_id: '', periodo: '' });
+  const toast = useToast();
 
   const handleDownload = async (type) => {
     setLoading(type);
     try {
+      // Usa api/export con filtros reales — si existen filtros, se pasan como query params
+      // Mantiene fallback fetch para compatibilidad, pero prioriza api helpers
+      const hasFilters = filtros.carrera_id || filtros.periodo;
+      if (hasFilters) {
+        const fn = type === 'excel' ? downloadExcel : downloadSQL;
+        const blob = await fn(filtros);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `export_${type}_${new Date().toISOString().split('T')[0]}${type === 'excel' ? '.xlsx' : '.sql'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        return;
+      }
       const API_URL = import.meta.env.VITE_API_URL || '/api';
       const token = localStorage.getItem('token');
 
@@ -42,7 +63,7 @@ export default function AdminExport() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('Error al descargar el archivo. Intenta de nuevo.');
+      toast.error('Error al descargar el archivo. Intenta de nuevo.');
       console.error('Download error:', error);
     } finally {
       setLoading(null);
@@ -86,6 +107,30 @@ export default function AdminExport() {
           Descarga los datos del sistema en diferentes formatos
         </p>
       </div>
+
+      {/* Filtros reales */}
+      <Card title="Filtros de exportación" subtitle="Opcional — aplica antes de descargar">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select
+            label="Filtrar por carrera"
+            value={filtros.carrera_id}
+            onChange={(e) => setFiltros({ ...filtros, carrera_id: e.target.value })}
+          >
+            <option value="">Todas las carreras</option>
+            <option value="1">Carrera 1</option>
+          </Select>
+          <Select
+            label="Filtrar por periodo"
+            value={filtros.periodo}
+            onChange={(e) => setFiltros({ ...filtros, periodo: e.target.value })}
+          >
+            <option value="">Todos los periodos</option>
+            <option value="2026-1">2026-1</option>
+            <option value="2026-2">2026-2</option>
+          </Select>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Filtros se envían a api/export si existen — usa <code>downloadExcel(filtros)</code></p>
+      </Card>
 
       {/* Export Options */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
