@@ -26,13 +26,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://extras.felipe-villa-nueva-teotitlan.site/api
+        - VITE_API_URL=https://alumnos.felipe-villa-nueva-teotitlan.site/api
         - VITE_ALUMNO_INVITE_TOKEN=ca2d949f-5cd2-4785-918e-205d6566f4e7
         - VITE_PROFESOR_INVITE_TOKEN=ef4a3a25-0214-4581-97dc-5104bb06c748
     ports:
       - "3050:3000"
     environment:
-      - VITE_API_URL=https://extras.felipe-villa-nueva-teotitlan.site/api
+      - VITE_API_URL=https://alumnos.felipe-villa-nueva-teotitlan.site/api
       - VITE_ALUMNO_INVITE_TOKEN=ca2d949f-5cd2-4785-918e-205d6566f4e7
       - VITE_PROFESOR_INVITE_TOKEN=ef4a3a25-0214-4581-97dc-5104bb06c748
       - CHOKIDAR_USEPOLLING=true
