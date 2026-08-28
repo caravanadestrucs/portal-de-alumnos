@@ -189,6 +189,8 @@ def test_file_db_pragma_after_migration():
     assert sum(dist.values()) == 109, f"sum should be 109, got {dist}"
     assert dist.get("TEO", 0) + dist.get("HUA", 0) == 109
     assert dist.get("TEO", 0) > 0 and dist.get("HUA", 0) > 0, f"both TEO and HUA should have >0, got {dist}"
-    # Expected from real boletas/ parsing: 79 TEO, 30 HUA (86 DOCX, 9 HUA paths)
-    assert dist.get("TEO") == 79 and dist.get("HUA") == 30, f"expected TEO 79 HUA 30, got {dist}"
+    # Expected from real boletas/ parsing via UNIDAD field: 56 HUA files / 30 TEO files (86 total)
+    # alumnos distribution: 73 HUA / 36 TEO (90 HUA names + 30 TEO names, 109 alumnos, 5 without docx flagged TEO)
+    # Previous buggy assignment used folder heuristic (9 huautla paths) -> 79 TEO / 30 HUA reversed; now corrected.
+    assert dist.get("HUA") == 73 and dist.get("TEO") == 36, f"expected HUA 73 TEO 36 (UNIDAD truth), got {dist}"
     conn.close()

@@ -41,3 +41,8 @@ build/
 docker-compose.override.yml
 # Local AI runtime state
 .atl/
+
+# Boletas reales (PII) - never commit
+boletas/
+BOLETAS TEOTITLAN 2025/
+
