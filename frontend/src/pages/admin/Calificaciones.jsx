@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import * as alumnosApi from '../../api/alumnos';
 import * as calificacionesApi from '../../api/calificaciones';
+import * as materiasApi from '../../api/materias';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { Save, User, BookOpen, Search, X } from 'lucide-react';
 import { TableSkeleton } from '../../components/ui/Skeleton';
-import { getGradeClass, getEffectiveGrade } from '../../utils/grades';
+import { getGradeClass } from '../../utils/grades';
 
 export default function AdminCalificaciones() {
   const toast = useToast();
@@ -53,7 +54,7 @@ export default function AdminCalificaciones() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Cerrar sugerencias al hacer click fuera
+  // Close suggestions on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -67,8 +68,124 @@ export default function AdminCalificaciones() {
   const loadCalificaciones = async () => {
     setLoading(true);
     try {
+      // Backend now returns { calificaciones, materias, total, total_materias, materias_con_calificacion, alumno }
       const data = await calificacionesApi.getCalificacionesByAlumno(selectedAlumno.id);
-      setCalificaciones(data || []);
+
+      // Backward compat: old API returned array directly
+      let calificacionesList = [];
+      let materiasList = null;
+
+      if (Array.isArray(data)) {
+        calificacionesList = data;
+      } else if (data && typeof data === 'object') {
+        calificacionesList = data.calificaciones || [];
+        // Prefer backend-provided materias for efficiency; fallback to materias API
+        if (Array.isArray(data.materias) && data.materias.length > 0) {
+          materiasList = data.materias;
+        } else if (Array.isArray(data.materias_con_calificacion) && data.materias_con_calificacion.length > 0) {
+          // materias_con_calificacion is [{materia, calificacion}]
+          materiasList = data.materias_con_calificacion.map((mc) => mc.materia);
+          // Also, if calificacionesList is empty but materias_con_calificacion has calificacion, reconstruct calificacionesList
+          // Prefer explicit calificacionesList, keep as is
+        }
+      }
+
+      // If materias still null, fetch via materias API using alumno carrera_id
+      if (!materiasList) {
+        const carreraId = selectedAlumno.carrera_id || selectedAlumno.carrera?.id || null;
+        if (carreraId) {
+          try {
+            materiasList = await materiasApi.getMateriasByCarrera(carreraId);
+          } catch (e) {
+            console.warn('Failed to fetch materias by carrera, fallback to getMaterias', e);
+            try {
+              materiasList = await materiasApi.getMaterias({ carrera_id: carreraId, per_page: 0 });
+            } catch (e2) {
+              console.error('Failed to fetch materias fallback', e2);
+              materiasList = [];
+            }
+          }
+        } else {
+          materiasList = [];
+        }
+      }
+
+      // If no materias at all, fallback to calificaciones-only view
+      if (!materiasList || materiasList.length === 0) {
+        // No materias for carrera — just show calificaciones as before
+        setCalificaciones(calificacionesList);
+        return;
+      }
+
+      // Merge: for each materia, find its calificacion (if multiple, pick latest by anio desc, periodo desc)
+      const displayList = materiasList.map((materia) => {
+        const candidates = calificacionesList.filter((c) => c.materia_id === materia.id);
+        let matched = null;
+        if (candidates.length === 1) {
+          matched = candidates[0];
+        } else if (candidates.length > 1) {
+          // Sort by anio desc, then periodo desc
+          candidates.sort((a, b) => {
+            const anioDiff = (b.anio || 0) - (a.anio || 0);
+            if (anioDiff !== 0) return anioDiff;
+            return String(b.periodo || '').localeCompare(String(a.periodo || ''));
+          });
+          matched = candidates[0];
+        }
+
+        if (matched) {
+          // Ensure materia field is populated for rendering
+          return { ...matched, materia };
+        }
+
+        // Placeholder for materia without calificacion
+        return {
+          // No id indicates create vs update
+          alumno_id: selectedAlumno.id,
+          materia_id: materia.id,
+          materia,
+          asistencia_1: 0,
+          asistencia_2: 0,
+          asistencia_3: 0,
+          asistencia_4: 0,
+          asistencia_5: 0,
+          practica_1: 0,
+          practica_2: 0,
+          extra_1: 0,
+          extra_2: 0,
+          calificacion_final: 0,
+          periodo: 'Regular',
+          anio: 2026,
+          _isNew: true,
+        };
+      });
+
+      // Handle orphan calificaciones whose materia is not in current carrera's materias (legacy data)
+      // Append them as extra rows so no existing grade is hidden
+      const materiaIds = new Set(materiasList.map((m) => m.id));
+      const orphans = calificacionesList.filter((c) => !materiaIds.has(c.materia_id));
+      if (orphans.length > 0) {
+        // Dedupe orphans by materia_id keeping latest
+        const orphanLatest = {};
+        for (const o of orphans) {
+          const existing = orphanLatest[o.materia_id];
+          if (!existing) {
+            orphanLatest[o.materia_id] = o;
+          } else {
+            const aAnio = o.anio || 0;
+            const eAnio = existing.anio || 0;
+            if (aAnio > eAnio || (aAnio === eAnio && String(o.periodo) > String(existing.periodo))) {
+              orphanLatest[o.materia_id] = o;
+            }
+          }
+        }
+        for (const o of Object.values(orphanLatest)) {
+          // Ensure materia field present (backend already includes it)
+          displayList.push(o);
+        }
+      }
+
+      setCalificaciones(displayList);
     } catch (error) {
       console.error('Error loading calificaciones:', error);
       setCalificaciones([]);
@@ -120,63 +237,66 @@ export default function AdminCalificaciones() {
     }
   };
 
-  const handleCalificacionChange = (calificacionId, field, value) => {
+  const handleCalificacionChange = (identifier, field, value) => {
     setCalificaciones((prev) =>
-      prev.map((c) =>
-        c.id === calificacionId ? { ...c, [field]: value } : c
-      )
+      prev.map((c) => {
+        const key = c.id != null ? c.id : `new-${c.materia_id}`;
+        const targetKey = identifier;
+        if (key === targetKey) {
+          return { ...c, [field]: value };
+        }
+        // Also fallback: if identifier is materia_id for new rows, match by materia_id
+        if (c.materia_id === identifier && c.id == null) {
+          return { ...c, [field]: value };
+        }
+        return c;
+      })
     );
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // SAFE bulk prep: bulk endpoint may not exist yet (backend currently exposes POST /calificaciones/bulk)
-      // Keep sequential loop as fallback — do NOT remove until bulk is verified.
-      // Bulk option (comentada) para migración futura:
-      // try {
-      //   const payload = calificaciones.map(c => ({
-      //     id: c.id,
-      //     alumno_id: c.alumno_id,
-      //     materia_id: c.materia_id,
-      //     asistencia_1: c.asistencia_1,
-      //     asistencia_2: c.asistencia_2,
-      //     asistencia_3: c.asistencia_3,
-      //     asistencia_4: c.asistencia_4,
-      //     asistencia_5: c.asistencia_5,
-      //     practica_1: c.practica_1,
-      //     practica_2: c.practica_2,
-      //     extra_1: c.extra_1,
-      //     extra_2: c.extra_2,
-      //     calificacion_final: c.calificacion_final,
-      //   }));
-      //   await calificacionesApi.bulkUpdateCalificaciones(payload);
-      //   toast.success(`${payload.length} calificaciones guardadas`);
-      //   return;
-      // } catch (bulkError) {
-      //   console.warn('Bulk no disponible, fallback a secuencial:', bulkError?.response?.status);
-      // }
-
-      // Fallback secuencial — con try/catch por lote para no perder todo si una falla
       let successCount = 0;
       let failCount = 0;
       for (const cal of calificaciones) {
         try {
-          await calificacionesApi.updateCalificacion(cal.id, {
-            asistencia_1: cal.asistencia_1,
-            asistencia_2: cal.asistencia_2,
-            asistencia_3: cal.asistencia_3,
-            asistencia_4: cal.asistencia_4,
-            asistencia_5: cal.asistencia_5,
-            practica_1: cal.practica_1,
-            practica_2: cal.practica_2,
-            extra_1: cal.extra_1,
-            extra_2: cal.extra_2,
-            calificacion_final: cal.calificacion_final,
-          });
+          if (cal.id) {
+            // Existing row → update via PUT /api/calificaciones/<id>
+            await calificacionesApi.updateCalificacion(cal.id, {
+              asistencia_1: cal.asistencia_1,
+              asistencia_2: cal.asistencia_2,
+              asistencia_3: cal.asistencia_3,
+              asistencia_4: cal.asistencia_4,
+              asistencia_5: cal.asistencia_5,
+              practica_1: cal.practica_1,
+              practica_2: cal.practica_2,
+              extra_1: cal.extra_1,
+              extra_2: cal.extra_2,
+              calificacion_final: cal.calificacion_final,
+            });
+          } else {
+            // New placeholder → create via POST /api/calificaciones
+            await calificacionesApi.createCalificacion({
+              alumno_id: cal.alumno_id,
+              materia_id: cal.materia_id,
+              periodo: cal.periodo || 'Regular',
+              anio: cal.anio || 2026,
+              asistencia_1: cal.asistencia_1,
+              asistencia_2: cal.asistencia_2,
+              asistencia_3: cal.asistencia_3,
+              asistencia_4: cal.asistencia_4,
+              asistencia_5: cal.asistencia_5,
+              practica_1: cal.practica_1,
+              practica_2: cal.practica_2,
+              extra_1: cal.extra_1,
+              extra_2: cal.extra_2,
+              calificacion_final: cal.calificacion_final,
+            });
+          }
           successCount++;
         } catch (rowError) {
-          console.error(`Error guardando calificacion ${cal.id}:`, rowError);
+          console.error(`Error saving calificacion ${cal.id || cal.materia_id}:`, rowError);
           failCount++;
         }
       }
@@ -187,12 +307,21 @@ export default function AdminCalificaciones() {
       } else {
         throw new Error('No se pudo guardar ninguna calificación');
       }
+      // Reload to get ids for newly created rows
+      if (successCount > 0) {
+        await loadCalificaciones();
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message || 'Error al guardar');
+      toast.error(error.response?.data?.message || error.response?.data?.error || error.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
+
+  // Count helpers for header
+  const totalMaterias = calificaciones.length;
+  const withCalificacion = calificaciones.filter((c) => c.id != null).length;
+  const withoutCalificacion = totalMaterias - withCalificacion;
 
   return (
     <div className="space-y-6">
@@ -281,7 +410,7 @@ export default function AdminCalificaciones() {
       {selectedAlumno && (
         <>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <User size={20} className="text-primary-500" />
               <span className="font-medium text-gray-700">
                 {selectedAlumno.nombre} {selectedAlumno.apellido_paterno}{' '}
@@ -289,10 +418,18 @@ export default function AdminCalificaciones() {
               </span>
               <span className="text-gray-400">|</span>
               <span className="text-gray-500">
-                {selectedAlumno.carrera?.nombre}
+                {selectedAlumno.carrera?.nombre || selectedAlumno.carrera}
               </span>
+              {totalMaterias > 0 && !loading && (
+                <>
+                  <span className="text-gray-400">|</span>
+                  <span className="text-sm text-gray-500">
+                    {totalMaterias} materias ({withCalificacion} con calificación, {withoutCalificacion} pendientes)
+                  </span>
+                </>
+              )}
             </div>
-            <Button onClick={handleSave} loading={saving}>
+            <Button onClick={handleSave} loading={saving} disabled={calificaciones.length === 0}>
               <Save size={18} />
               Guardar Cambios
             </Button>
@@ -344,124 +481,132 @@ export default function AdminCalificaciones() {
                     </tr>
                   </thead>
                   <tbody>
-                    {calificaciones.map((cal) => (
-                      <tr key={cal.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4">
-                          <span className="font-medium text-gray-800">
-                            {cal.materia?.nombre || 'Materia'}
-                          </span>
-                          <span className="text-gray-400 text-sm ml-2">
-                            ({cal.materia?.codigo})
-                          </span>
-                        </td>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <td key={n} className="text-center py-3 px-2">
+                    {calificaciones.map((cal) => {
+                      const rowKey = cal.id != null ? cal.id : `new-${cal.materia_id}`;
+                      const identifier = cal.id != null ? cal.id : cal.materia_id;
+                      const isNew = cal._isNew || cal.id == null;
+                      return (
+                        <tr key={rowKey} className={`border-b border-gray-100 hover:bg-gray-50 ${isNew ? 'bg-amber-50/30' : ''}`}>
+                          <td className="py-3 px-4">
+                            <span className="font-medium text-gray-800">
+                              {cal.materia?.nombre || 'Materia'}
+                            </span>
+                            <span className="text-gray-400 text-sm ml-2">
+                              ({cal.materia?.codigo})
+                            </span>
+                            {isNew && (
+                              <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">nueva</span>
+                            )}
+                          </td>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <td key={n} className="text-center py-3 px-2">
+                              <input
+                                type="checkbox"
+                                checked={cal[`asistencia_${n}`] === 1}
+                                onChange={(e) =>
+                                  handleCalificacionChange(
+                                    identifier,
+                                    `asistencia_${n}`,
+                                    e.target.checked ? 1 : 0
+                                  )
+                                }
+                                className="w-5 h-5 rounded border-gray-300 text-primary-600"
+                              />
+                            </td>
+                          ))}
+                          <td className="text-center py-3 px-2">
                             <input
-                              type="checkbox"
-                              checked={cal[`asistencia_${n}`] === 1}
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={cal.practica_1 || ''}
                               onChange={(e) =>
                                 handleCalificacionChange(
-                                  cal.id,
-                                  `asistencia_${n}`,
-                                  e.target.checked ? 1 : 0
+                                  identifier,
+                                  'practica_1',
+                                  parseFloat(e.target.value) || 0
                                 )
                               }
-                              className="w-5 h-5 rounded border-gray-300 text-primary-600"
+                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                                cal.practica_1
+                              )}`}
                             />
                           </td>
-                        ))}
-                        <td className="text-center py-3 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={cal.practica_1 || ''}
-                            onChange={(e) =>
-                              handleCalificacionChange(
-                                cal.id,
-                                'practica_1',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
-                              cal.practica_1
-                            )}`}
-                          />
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={cal.practica_2 || ''}
-                            onChange={(e) =>
-                              handleCalificacionChange(
-                                cal.id,
-                                'practica_2',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
-                              cal.practica_2
-                            )}`}
-                          />
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={cal.extra_1 || ''}
-                            onChange={(e) =>
-                              handleCalificacionChange(
-                                cal.id,
-                                'extra_1',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
-                              cal.extra_1
-                            )}`}
-                          />
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={cal.extra_2 || ''}
-                            onChange={(e) =>
-                              handleCalificacionChange(
-                                cal.id,
-                                'extra_2',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
-                              cal.extra_2
-                            )}`}
-                          />
-                        </td>
-                        <td className="text-center py-3 px-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={cal.calificacion_final || ''}
-                            onChange={(e) =>
-                              handleCalificacionChange(
-                                cal.id,
-                                'calificacion_final',
-                                parseFloat(e.target.value) || 0
-                              )
-                            }
-                            className={`w-16 text-center px-2 py-1 rounded-lg input-glass font-bold ${getGradeClass(
-                              cal.calificacion_final
-                            )}`}
-                          />
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="text-center py-3 px-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={cal.practica_2 || ''}
+                              onChange={(e) =>
+                                handleCalificacionChange(
+                                  identifier,
+                                  'practica_2',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                                cal.practica_2
+                              )}`}
+                            />
+                          </td>
+                          <td className="text-center py-3 px-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={cal.extra_1 || ''}
+                              onChange={(e) =>
+                                handleCalificacionChange(
+                                  identifier,
+                                  'extra_1',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                                cal.extra_1
+                              )}`}
+                            />
+                          </td>
+                          <td className="text-center py-3 px-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={cal.extra_2 || ''}
+                              onChange={(e) =>
+                                handleCalificacionChange(
+                                  identifier,
+                                  'extra_2',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass ${getGradeClass(
+                                cal.extra_2
+                              )}`}
+                            />
+                          </td>
+                          <td className="text-center py-3 px-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={cal.calificacion_final || ''}
+                              onChange={(e) =>
+                                handleCalificacionChange(
+                                  identifier,
+                                  'calificacion_final',
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass font-bold ${getGradeClass(
+                                cal.calificacion_final
+                              )}`}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -480,6 +625,12 @@ export default function AdminCalificaciones() {
                   <div className="w-4 h-4 rounded grade-failed"></div>
                   <span className="text-gray-500">Reprobado (&lt;8)</span>
                 </div>
+                {withoutCalificacion > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded bg-amber-100 border border-amber-200"></div>
+                    <span className="text-gray-500">Pendiente ({withoutCalificacion})</span>
+                  </div>
+                )}
               </div>
             </Card>
           )}

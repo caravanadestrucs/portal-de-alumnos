@@ -48,11 +48,34 @@ def get_alumno_calificaciones(alumno_id):
         query = query.filter(Calificacion.materia_id == materia_id)
     
     calificaciones = query.order_by(Calificacion.anio.desc(), Calificacion.periodo).all()
+
+    # Also fetch all materias of alumno's carrera for frontend merging
+    materias = []
+    materias_con_calificacion = []
+    try:
+        materias = Materia.query.filter_by(carrera_id=alumno.carrera_id).order_by(Materia.nombre).all()
+        # Build latest calificacion per materia for convenience
+        latest_by_materia = {}
+        for cal in calificaciones:
+            if cal.materia_id not in latest_by_materia:
+                latest_by_materia[cal.materia_id] = cal
+        for m in materias:
+            cal = latest_by_materia.get(m.id)
+            materias_con_calificacion.append({
+                'materia': m.to_dict(),
+                'calificacion': cal.to_dict() if cal else None
+            })
+    except Exception:
+        materias = []
+        materias_con_calificacion = []
     
     return jsonify({
         'alumno': alumno.to_dict_public(),
         'calificaciones': [c.to_dict() for c in calificaciones],
-        'total': len(calificaciones)
+        'total': len(calificaciones),
+        'materias': [m.to_dict() for m in materias],
+        'total_materias': len(materias),
+        'materias_con_calificacion': materias_con_calificacion
     }), 200
 
 
@@ -228,6 +251,60 @@ def get_calificacion(id):
     return jsonify({'calificacion': calificacion.to_dict()}), 200
 
 
+@calificaciones_bp.route('/<int:id>', methods=['PUT'])
+@admin_required
+def update_calificacion(id):
+    """
+    Actualiza una calificación por ID (admin) — scoped via alumno
+    Body may contain: asistencia_1-5, practica_1, practica_2, extra_1, extra_2, calificacion_final, periodo, anio
+    """
+    calificacion = Calificacion.query.get_or_404(id)
+    alumno = db.session.get(Alumno, calificacion.alumno_id)
+    if alumno and _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Datos requeridos'}), 400
+
+    try:
+        if 'asistencia_1' in data:
+            calificacion.asistencia_1 = max(0, min(1, int(data['asistencia_1'])))
+        if 'asistencia_2' in data:
+            calificacion.asistencia_2 = max(0, min(1, int(data['asistencia_2'])))
+        if 'asistencia_3' in data:
+            calificacion.asistencia_3 = max(0, min(1, int(data['asistencia_3'])))
+        if 'asistencia_4' in data:
+            calificacion.asistencia_4 = max(0, min(1, int(data['asistencia_4'])))
+        if 'asistencia_5' in data:
+            calificacion.asistencia_5 = max(0, min(1, int(data['asistencia_5'])))
+        if 'practica_1' in data:
+            calificacion.practica_1 = max(0, min(10, float(data['practica_1'])))
+        if 'practica_2' in data:
+            calificacion.practica_2 = max(0, min(10, float(data['practica_2'])))
+        if 'extra_1' in data:
+            calificacion.extra_1 = max(0, min(10, float(data['extra_1'])))
+        if 'extra_2' in data:
+            calificacion.extra_2 = max(0, min(10, float(data['extra_2'])))
+        if 'calificacion_final' in data:
+            calificacion.calificacion_final = max(0, min(10, float(data['calificacion_final'])))
+        if 'periodo' in data:
+            calificacion.periodo = data['periodo']
+        if 'anio' in data:
+            calificacion.anio = int(data['anio'])
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Calificación actualizada exitosamente',
+            'calificacion': calificacion.to_dict()
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error al actualizar calificación: {str(e)}'}), 500
+
+
 @calificaciones_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
 def delete_calificacion(id):
@@ -278,7 +355,7 @@ def get_periodos():
     return jsonify({'periodos': periodos}), 200
 
 
-@calificaciones_bp.route('/bulk', methods=['POST'])
+@calificaciones_bp.route('/bulk', methods=['POST', 'PUT'])
 @admin_required
 def bulk_create_calificaciones():
     """

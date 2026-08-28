@@ -1,9 +1,9 @@
 import api from './index';
 
-export const getCalificacionesByAlumno = async (alumnoId) => {
-  // Backend returns: { alumno: {...}, calificaciones: [...], total: N }
-  const response = await api.get(`/calificaciones/alumnos/${alumnoId}`);
-  return response.data.calificaciones || [];
+export const getCalificacionesByAlumno = async (alumnoId, params = {}) => {
+  // Backend returns: { alumno: {...}, calificaciones: [...], materias: [...], total, total_materias, materias_con_calificacion }
+  const response = await api.get(`/calificaciones/alumnos/${alumnoId}`, { params });
+  return response.data;
 };
 
 export const createCalificacion = async (calificacionData) => {
