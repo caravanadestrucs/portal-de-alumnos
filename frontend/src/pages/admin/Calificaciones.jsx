@@ -587,22 +587,28 @@ export default function AdminCalificaciones() {
                             />
                           </td>
                           <td className="text-center py-3 px-2">
-                            <input
-                              type="number"
-                              min="0"
-                              max="10"
-                              value={cal.calificacion_final || ''}
-                              onChange={(e) =>
-                                handleCalificacionChange(
-                                  identifier,
-                                  'calificacion_final',
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className={`w-16 text-center px-2 py-1 rounded-lg input-glass font-bold ${getGradeClass(
-                                cal.calificacion_final
-                              )}`}
-                            />
+                            {isNew && !cal.calificacion_final ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-lg bg-gray-100 text-gray-500 text-xs font-medium">
+                                Sin calificar
+                              </span>
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={cal.calificacion_final || ''}
+                                onChange={(e) =>
+                                  handleCalificacionChange(
+                                    identifier,
+                                    'calificacion_final',
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className={`w-16 text-center px-2 py-1 rounded-lg input-glass font-bold ${getGradeClass(
+                                  cal.calificacion_final
+                                )}`}
+                              />
+                            )}
                           </td>
                         </tr>
                       );
