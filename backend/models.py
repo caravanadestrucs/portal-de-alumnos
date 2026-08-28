@@ -511,6 +511,8 @@ class Grupo(db.Model):
     nombre = db.Column(db.String(50), nullable=False)  #ej: "A", "B"
     carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
     sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=False, index=True)
+    periodo = db.Column(db.String(20), nullable=True)
+    anio = db.Column(db.Integer, nullable=True)
     activo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -528,6 +530,8 @@ class Grupo(db.Model):
             'carrera': self.carrera.to_dict() if self.carrera else None,
             'sede_id': self.sede_id,
             'sede': self.sede.to_dict() if self.sede else None,
+            'periodo': self.periodo,
+            'anio': self.anio,
             'activo': self.activo,
             'total_integrantes': self.integrantes.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None
