@@ -179,11 +179,16 @@ def test_file_db_pragma_after_migration():
         cur.execute(f"SELECT COUNT(*) FROM {tbl} WHERE sede_id IS NULL")
         null_count = cur.fetchone()[0]
         assert null_count == 0, f"{tbl} still has {null_count} NULL sede_id rows after migration"
-    # Verify alumnos count still 109 and all TEO
+    # Verify alumnos count still 109 and distributed TEO/HUA via boletas/ (not 109/0)
     cur.execute("SELECT COUNT(*), COUNT(DISTINCT sede_id) FROM alumnos")
     total, distinct = cur.fetchone()
     assert total == 109, f"expected 109 alumnos after migration, got {total}"
-    cur.execute("SELECT COUNT(*) FROM alumnos WHERE sede_id = 1")
-    teo_count = cur.fetchone()[0]
-    assert teo_count == 109, f"all 109 should be TEO (id=1), got {teo_count} TEO"
+    cur.execute("SELECT s.codigo, COUNT(*) FROM alumnos a JOIN sedes s ON a.sede_id=s.id GROUP BY s.codigo")
+    rows = cur.fetchall()
+    dist = {r[0]: r[1] for r in rows}
+    assert sum(dist.values()) == 109, f"sum should be 109, got {dist}"
+    assert dist.get("TEO", 0) + dist.get("HUA", 0) == 109
+    assert dist.get("TEO", 0) > 0 and dist.get("HUA", 0) > 0, f"both TEO and HUA should have >0, got {dist}"
+    # Expected from real boletas/ parsing: 79 TEO, 30 HUA (86 DOCX, 9 HUA paths)
+    assert dist.get("TEO") == 79 and dist.get("HUA") == 30, f"expected TEO 79 HUA 30, got {dist}"
     conn.close()
