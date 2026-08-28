@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../api/alumnos', () => ({
@@ -11,6 +11,8 @@ vi.mock('../../api/alumnos', () => ({
 }));
 
 vi.mock('../../api/carreras', () => ({ getCarreras: vi.fn().mockResolvedValue([]) }));
+vi.mock('../../api/sedes', () => ({ getSedes: vi.fn().mockResolvedValue({ sedes: [{ id: 1, codigo: 'TEO' }, { id: 2, codigo: 'HUA' }] }) }));
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ isGeneralAdmin: true, isSedeAdmin: false }) }));
 vi.mock('../../hooks/useFetch', () => ({ useFetch: () => ({ data: [] }) }));
 
 import Alumnos from './Alumnos';
@@ -28,11 +30,17 @@ describe('Alumnos bulk wiring', () => {
 
   it('seleccionar checkbox habilita botón con contador', async () => {
     const user = userEvent.setup();
-    render(<Alumnos />);
+    await act(async () => {
+      render(<Alumnos />);
+    });
     const checkboxes = await screen.findAllByRole('checkbox');
     // second is row checkbox (first is select-all)
-    await user.click(checkboxes[1] || checkboxes[0]);
-    const bulkBtn = screen.getByRole('button', { name: /enviar credenciales \(1\)/i });
-    expect(bulkBtn).toBeEnabled();
+    await act(async () => {
+      await user.click(checkboxes[1] || checkboxes[0]);
+    });
+    await waitFor(() => {
+      const bulkBtn = screen.getByRole('button', { name: /enviar credenciales \(1\)/i });
+      expect(bulkBtn).toBeEnabled();
+    });
   });
 });

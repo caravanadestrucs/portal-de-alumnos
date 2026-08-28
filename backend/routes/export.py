@@ -5,11 +5,12 @@ import io
 import json
 from datetime import datetime
 from flask import Blueprint, request, Response
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 from sqlalchemy import text
 
 from models import db, Admin, Alumno, Carrera, Materia, Calificacion, NotaRemision, PracticaProfesional
 from utils.decorators import admin_required
+from utils.scope import scope_by_sede
 
 export_bp = Blueprint('export', __name__)
 
@@ -427,17 +428,41 @@ def export_excel():
 @admin_required
 def export_json():
     """
-    Genera un archivo JSON con todos los datos
+    Genera un archivo JSON con todos los datos — scoped by sede for sede_admin
     """
+    alumnos_q = scope_by_sede(Alumno.query, Alumno.sede_id)
+    alumnos = alumnos_q.all()
+    alumno_ids = [a.id for a in alumnos]
+    # filter related by alumno_ids when sede_admin
+    cal_q = Calificacion.query
+    notas_q = NotaRemision.query
+    pract_q = PracticaProfesional.query
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin':
+        if alumno_ids:
+            cal_q = cal_q.filter(Calificacion.alumno_id.in_(alumno_ids))
+            notas_q = notas_q.filter(NotaRemision.alumno_id.in_(alumno_ids))
+            pract_q = pract_q.filter(PracticaProfesional.alumno_id.in_(alumno_ids))
+        else:
+            cal_q = cal_q.filter(db.text('1=0'))
+            notas_q = notas_q.filter(db.text('1=0'))
+            pract_q = pract_q.filter(db.text('1=0'))
+    else:
+        # general with ?sede_id
+        qs_sede = request.args.get('sede_id', type=int)
+        if qs_sede is not None:
+            cal_q = cal_q.join(Alumno, Calificacion.alumno_id == Alumno.id).filter(Alumno.sede_id == qs_sede)
+            notas_q = notas_q.join(Alumno, NotaRemision.alumno_id == Alumno.id).filter(Alumno.sede_id == qs_sede)
+            pract_q = pract_q.join(Alumno, PracticaProfesional.alumno_id == Alumno.id).filter(Alumno.sede_id == qs_sede)
     data = {
         'export_date': datetime.utcnow().isoformat(),
         'version': '1.0',
         'carreras': [c.to_dict() for c in Carrera.query.all()],
         'materias': [m.to_dict() for m in Materia.query.all()],
-        'alumnos': [a.to_dict() for a in Alumno.query.all()],
-        'calificaciones': [c.to_dict() for c in Calificacion.query.all()],
-        'notas_remision': [n.to_dict() for n in NotaRemision.query.all()],
-        'practicas': [p.to_dict() for p in PracticaProfesional.query.all()]
+        'alumnos': [a.to_dict() for a in alumnos],
+        'calificaciones': [c.to_dict() for c in cal_q.all()],
+        'notas_remision': [n.to_dict() for n in notas_q.all()],
+        'practicas': [p.to_dict() for p in pract_q.all()]
     }
     
     timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')

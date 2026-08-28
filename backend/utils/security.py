@@ -6,38 +6,61 @@ from flask_jwt_extended import create_access_token, create_refresh_token, decode
 import json
 
 
-def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None):
+def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None, role: str = None, sede_id: int = None):
     """
     Genera access y refresh tokens para un usuario
-    
+
     Args:
         user_id: ID del usuario
         user_type: 'admin', 'alumno' o 'profesor'
         extra_claims: Claims adicionales opcionales
-    
+        role: admin role ('general_admin'|'sede_admin') — embedded as claim
+        sede_id: sede FK — embedded as claim (None for general_admin)
+
     Returns:
         dict con access_token y refresh_token
     """
     identity = str(user_id)
-    
-    claims = {
+
+    # Base user claims (include both type and user_type for compat)
+    base_claims = {
         'id': user_id,
-        'type': user_type
+        'type': user_type,
+        'user_type': user_type,
     }
+    if role is not None:
+        base_claims['role'] = role
+    if sede_id is not None:
+        base_claims['sede_id'] = sede_id
+    elif role == 'general_admin':
+        base_claims['sede_id'] = None
     if extra_claims:
-        claims.update(extra_claims)
+        for k, v in extra_claims.items():
+            if k not in base_claims:
+                base_claims[k] = v
+            elif k in ('role', 'sede_id') and base_claims.get(k) is None:
+                base_claims[k] = v
+
+    # Access token can safely overwrite `type` (user type) — access check is lenient
+    access_claims = dict(base_claims)
+    # Refresh token MUST preserve `type` == "refresh" for jwt_required(refresh=True)
+    # so we strip `type` from refresh claims and rely on `user_type`
+    refresh_claims = {k: v for k, v in base_claims.items() if k != 'type'}
+    # ensure user_type present for refresh
+    if 'user_type' not in refresh_claims:
+        refresh_claims['user_type'] = user_type
     
     # Token de acceso (24 horas)
     access_token = create_access_token(
         identity=identity,
-        additional_claims=claims,
+        additional_claims=access_claims,
         expires_delta=timedelta(hours=24)
     )
     
     # Token de refresco (30 días)
     refresh_token = create_refresh_token(
         identity=identity,
-        additional_claims=claims,
+        additional_claims=refresh_claims,
         expires_delta=timedelta(days=30)
     )
     

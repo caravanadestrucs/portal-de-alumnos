@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAlumnos, createAlumno, updateAlumno, deleteAlumno, sendBulkCredentials } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
+import { getSedes } from '../../api/sedes';
 import { useFetch } from '../../hooks/useFetch';
+import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
@@ -20,6 +22,9 @@ const ITEMS_PER_PAGE = 10;
 
 export default function AdminAlumnos() {
   const { data: carreras } = useFetch(getCarreras);
+  const { isGeneralAdmin } = useAuth();
+  const [sedes, setSedes] = useState([]);
+  const [sedeFilter, setSedeFilter] = useState('');
 
   const [alumnos, setAlumnos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +43,7 @@ export default function AdminAlumnos() {
     numero_control: '',
     password: '',
     carrera_id: '',
+    sede_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -56,10 +62,28 @@ export default function AdminAlumnos() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
+  // ── Fetch sedes for filter ───────────────────────────────
+  useEffect(() => {
+    getSedes().then((data) => setSedes(data.sedes || [])).catch(() => {});
+  }, []);
+
+  // Listen to navbar sede switcher
+  useEffect(() => {
+    const handler = (e) => {
+      const v = e.detail;
+      if (v === 'all') setSedeFilter('');
+      else if (v === '1' || v === '2') setSedeFilter(v);
+    };
+    window.addEventListener('sede-change', handler);
+    const stored = localStorage.getItem('activeSede');
+    if (stored && stored !== 'all') setSedeFilter(stored);
+    return () => window.removeEventListener('sede-change', handler);
+  }, []);
+
   // ── Resetear a página 1 cuando cambia la búsqueda ────────
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm]);
+  }, [debouncedSearchTerm, sedeFilter]);
 
   // ── Fetch de alumnos con paginación y búsqueda ───────────
   const fetchAlumnos = useCallback(async () => {
@@ -69,6 +93,7 @@ export default function AdminAlumnos() {
         page,
         per_page: ITEMS_PER_PAGE,
         search: debouncedSearchTerm || undefined,
+        sede_id: sedeFilter || undefined,
       });
       setAlumnos(result.alumnos || []);
       setTotalItems(result.total || 0);
@@ -79,7 +104,7 @@ export default function AdminAlumnos() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearchTerm]);
+  }, [page, debouncedSearchTerm, sedeFilter]);
 
   useEffect(() => {
     fetchAlumnos();
@@ -188,6 +213,16 @@ export default function AdminAlumnos() {
       render: (row) => row.carrera?.nombre || '-',
     },
     {
+      key: 'sede',
+      header: 'Sede',
+      width: '90px',
+      render: (row) => {
+        const code = row.sede?.codigo || (row.sede_id === 1 ? 'TEO' : row.sede_id === 2 ? 'HUA' : row.sede_id || '-');
+        const variant = code === 'TEO' ? 'primary' : code === 'HUA' ? 'accent' : 'default';
+        return <Badge variant={variant}>{code}</Badge>;
+      },
+    },
+    {
       key: 'activo',
       header: 'Estado',
       render: (row) => (
@@ -237,6 +272,7 @@ export default function AdminAlumnos() {
       numero_control: '',
       password: '',
       carrera_id: '',
+      sede_id: sedeFilter || (isGeneralAdmin ? '' : (sedes[0]?.id || '')),
     });
     setIsModalOpen(true);
   };
@@ -251,6 +287,7 @@ export default function AdminAlumnos() {
       numero_control: alumno.numero_control,
       password: '',
       carrera_id: alumno.carrera_id || '',
+      sede_id: alumno.sede_id || alumno.sede?.id || '',
     });
     setIsModalOpen(true);
   };
@@ -347,16 +384,38 @@ export default function AdminAlumnos() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Buscar por nombre, número de control o email..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 rounded-xl input-glass"
-        />
+      {/* Search + Sede filter */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por nombre, número de control o email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 rounded-xl input-glass"
+          />
+        </div>
+        <div className="sm:w-56">
+          <select
+            aria-label="Filtrar por sede"
+            value={sedeFilter}
+            onChange={(e) => setSedeFilter(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-sm"
+          >
+            <option value="">Todas las sedes</option>
+            {sedes.map((s) => (
+              <option key={s.id} value={s.id}>{s.codigo} — {s.nombre}</option>
+            ))}
+            {/* fallback if sedes not loaded yet */}
+            {sedes.length === 0 && (
+              <>
+                <option value="1">TEO — Teotitlan</option>
+                <option value="2">HUA — Huautla</option>
+              </>
+            )}
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -508,6 +567,24 @@ export default function AdminAlumnos() {
                   {carrera.nombre}
                 </option>
               ))}
+          </Select>
+
+          <Select
+            label="Sede"
+            value={formData.sede_id}
+            onChange={(e) => setFormData({ ...formData, sede_id: e.target.value })}
+            required
+          >
+            <option value="">Seleccionar sede</option>
+            {sedes.map((s) => (
+              <option key={s.id} value={s.id}>{s.codigo} — {s.nombre}</option>
+            ))}
+            {sedes.length === 0 && (
+              <>
+                <option value="1">TEO — Teotitlan</option>
+                <option value="2">HUA — Huautla</option>
+              </>
+            )}
           </Select>
 
           {!editingAlumno ? (

@@ -6,6 +6,7 @@ import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import api from '../../api';
+import { getSedes } from '../../api/sedes';
 import { Plus, Pencil, Trash2, Key, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -20,7 +21,10 @@ export default function AdminAdmins() {
     email: '',
     nombre: '',
     password: '',
+    role: 'general_admin',
+    sede_id: '',
   });
+  const [sedes, setSedes] = useState([]);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -32,7 +36,18 @@ export default function AdminAdmins() {
     adminName: '',
     newPassword: '',
   });
-  const { user } = useAuth();
+  const { user, isGeneralAdmin } = useAuth();
+
+  const fetchSedes = async () => {
+    try {
+      const data = await getSedes();
+      setSedes(data.sedes || []);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchSedes();
+  }, []);
 
   const fetchAdmins = async () => {
     try {
@@ -51,7 +66,7 @@ export default function AdminAdmins() {
 
   const openCreate = () => {
     setEditingAdmin(null);
-    setFormData({ username: '', email: '', nombre: '', password: '' });
+    setFormData({ username: '', email: '', nombre: '', password: '', role: 'general_admin', sede_id: '' });
     setError('');
     setShowModal(true);
   };
@@ -63,6 +78,8 @@ export default function AdminAdmins() {
       email: admin.email,
       nombre: admin.nombre,
       password: '',
+      role: admin.role || 'general_admin',
+      sede_id: admin.sede_id || admin.sede?.id || '',
     });
     setError('');
     setShowModal(true);
@@ -77,6 +94,17 @@ export default function AdminAdmins() {
       const payload = { ...formData };
       if (editingAdmin && !payload.password) {
         delete payload.password;
+      }
+      // normalize role/sede
+      if (payload.role === 'sede_admin' && !payload.sede_id) {
+        setError('Sede requerida para sede_admin');
+        setSaving(false);
+        return;
+      }
+      if (payload.role === 'general_admin') {
+        payload.sede_id = null;
+      } else if (payload.sede_id) {
+        payload.sede_id = parseInt(payload.sede_id, 10);
       }
 
       if (editingAdmin) {
@@ -196,6 +224,8 @@ export default function AdminAdmins() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Usuario</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Nombre</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Rol</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Sede</th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-700">Acciones</th>
                 </tr>
               </thead>
@@ -212,6 +242,12 @@ export default function AdminAdmins() {
                     </td>
                     <td className="py-3 px-4 text-gray-700">{admin.nombre}</td>
                     <td className="py-3 px-4 text-gray-600">{admin.email}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-xs px-2 py-1 rounded-full ${admin.role === 'general_admin' ? 'bg-accent-100 text-accent-700' : 'bg-primary-100 text-primary-700'}`}>
+                        {admin.role || 'general_admin'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">{admin.sede?.codigo || (admin.sede_id ? `Sede ${admin.sede_id}` : '—')}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
@@ -318,6 +354,49 @@ export default function AdminAdmins() {
               placeholder="Ej: admin@universidadfv.edu.mx"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Rol *
+            </label>
+            <select
+              aria-label="Rol"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+              disabled={!isGeneralAdmin}
+            >
+              <option value="general_admin">general_admin</option>
+              <option value="sede_admin">sede_admin</option>
+            </select>
+            {!isGeneralAdmin && <p className="text-xs text-gray-500 mt-1">Solo general_admin puede asignar roles</p>}
+          </div>
+
+          {formData.role === 'sede_admin' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sede *
+              </label>
+              <select
+                aria-label="Sede"
+                value={formData.sede_id}
+                onChange={(e) => setFormData({ ...formData, sede_id: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              >
+                <option value="">Seleccionar sede</option>
+                {sedes.length > 0 ? sedes.map((s) => (
+                  <option key={s.id} value={s.id}>{s.codigo} — {s.nombre}</option>
+                )) : (
+                  <>
+                    <option value="1">TEO — Teotitlan</option>
+                    <option value="2">HUA — Huautla</option>
+                  </>
+                )}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

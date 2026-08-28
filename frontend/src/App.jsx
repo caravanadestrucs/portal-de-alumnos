@@ -31,6 +31,9 @@ import AdminRequisitos from './pages/admin/Requisitos';
 // See frontend/src/hooks/useImport.js and components/import/ImportSteps.jsx placeholders
 const AdminImportar = lazy(() => import('./pages/admin/Importar'));
 const AdminBoletas = lazy(() => import('./pages/admin/Boletas'));
+const AdminSedes = lazy(() => import('./pages/admin/Sedes'));
+const AdminWiki = lazy(() => import('./pages/admin/WikiAdmin'));
+const WikiPage = lazy(() => import('./pages/WikiPage'));
 
 // Alumno Pages
 import AlumnoDashboard from './pages/alumno/Dashboard';
@@ -43,8 +46,8 @@ import ProfesorDashboard from './pages/profesor/Dashboard';
 import ProfesorCalificaciones from './pages/profesor/Calificaciones';
 
 // Protected Route Component
-function ProtectedRoute({ children, allowedRole }) {
-  const { user, loading } = useAuth();
+export function ProtectedRoute({ children, allowedRole, requireGeneralAdmin }) {
+  const { user, loading, isGeneralAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -62,7 +65,21 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to={`/${user.rol}`} replace />;
   }
 
+  if (requireGeneralAdmin && !isGeneralAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  // sede_admin vs general_admin already enforced by backend; sede isolation via scope
+  // Check role-based path guard for sedes
+  if (requireGeneralAdmin && user?.role === 'sede_admin') {
+    return <Navigate to="/admin" replace />;
+  }
+
   return children;
+}
+
+export function GeneralAdminRoute({ children }) {
+  return <ProtectedRoute allowedRole="admin" requireGeneralAdmin>{children}</ProtectedRoute>;
 }
 
 // Public Route (redirect if logged in)
@@ -156,10 +173,23 @@ function App() {
               <Route path="importar" element={<AdminImportar />} />
               <Route path="boletas" element={<AdminBoletas />} />
               <Route path="admins" element={<AdminAdmins />} />
+              <Route path="sedes" element={<GeneralAdminRoute><AdminSedes /></GeneralAdminRoute>} />
+              <Route path="wiki" element={<AdminWiki />} />
+              <Route path="wiki/:id" element={<AdminWiki />} />
               {/* <Route path="requisitos" element={<AdminRequisitos />} /> */}
               <Route path="exportar" element={<AdminExport />} />
               <Route path="configuracion" element={<AdminSettings />} />
             </Route>
+
+            {/* Wiki public read — authenticated (admin/alumno/profesor) */}
+            <Route
+              path="/wiki/:slug"
+              element={
+                <ProtectedRoute>
+                  <WikiPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Alumno Routes */}
             <Route

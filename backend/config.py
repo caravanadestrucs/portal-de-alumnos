@@ -3,7 +3,17 @@ Configuración de la aplicación Portal FV
 Desarrollo: SQLite | Producción: MySQL
 """
 import os
+import pathlib
 from datetime import timedelta
+
+try:
+    from dotenv import load_dotenv
+    # Load backend/.env if present (local dev)
+    _env_path = pathlib.Path(__file__).resolve().parent / ".env"
+    if _env_path.exists():
+        load_dotenv(dotenv_path=_env_path)
+except ImportError:
+    pass
 
 
 class Config:
@@ -37,9 +47,11 @@ class DevelopmentConfig(Config):
     """Configuración de desarrollo - SQLite"""
     DEBUG = True
     ENV = 'development'
-    
-    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-jwt-secret-key')
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
+
+    # Default dev keys are 64 hex chars (>=32) to silence InsecureKeyLengthWarning.
+    # In production these MUST be overridden via env vars; see backend/.env.example.
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '43a26e541b4601e9ddbeeef4b654ac465b51d3b471ecd12a83e6c1c458b300e4')
+    SECRET_KEY = os.environ.get('SECRET_KEY', '43a26e541b4601e9ddbeeef4b654ac465b51d3b471ecd12a83e6c1c458b300e4')
     
     # Usar DATABASE_URL si está definida (Docker), sino usar path local
     db_url = os.environ.get('DATABASE_URL')
@@ -85,8 +97,9 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
-    SECRET_KEY = 'test-secret-key'
-    JWT_SECRET_KEY = 'test-jwt-secret-key'
+    # >=32 chars to avoid InsecureKeyLengthWarning in test runs
+    SECRET_KEY = 'test-secret-key-32-chars-long-abcdef1234567890abcd'
+    JWT_SECRET_KEY = 'test-jwt-secret-key-32-chars-long-abcdef1234567890ab'
 
 
 # Mapeo de configuraciones por entorno

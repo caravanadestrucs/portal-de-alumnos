@@ -7,10 +7,11 @@ import logging
 from datetime import datetime
 from zipfile import ZipFile
 from flask import Blueprint, jsonify, request, send_file
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Alumno, Calificacion, Materia, Carrera
 from utils.decorators import admin_required
+from utils.scope import scope_by_sede
 
 boletas_bp = Blueprint('boletas', __name__)
 
@@ -27,7 +28,7 @@ def listar_alumnos_boletas():
     grupo_id = request.args.get('grupo_id', type=int)
     search = request.args.get('search', '').strip()
     
-    query = Alumno.query.filter_by(activo=True)
+    query = scope_by_sede(Alumno.query.filter_by(activo=True), Alumno.sede_id)
     
     if carrera_id:
         query = query.filter_by(carrera_id=carrera_id)
@@ -73,6 +74,12 @@ def listar_alumnos_boletas():
 # GET /api/boletas/download/<alumno_id>
 # Descarga una boleta individual en .docx
 # ============================================================
+def _boleta_forbidden(alumno):
+    from flask_jwt_extended import get_jwt as _gj
+    claims = _gj()
+    return claims.get('role') == 'sede_admin' and alumno.sede_id != claims.get('sede_id')
+
+
 @boletas_bp.route('/download/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 @admin_required
@@ -80,6 +87,8 @@ def descargar_boleta(alumno_id):
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
         return jsonify({'error': 'Alumno no encontrado'}), 404
+    if _boleta_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     
@@ -195,6 +204,8 @@ def vista_previa_boleta(alumno_id):
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
         return jsonify({'error': 'Alumno no encontrado'}), 404
+    if _boleta_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     

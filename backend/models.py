@@ -31,6 +31,31 @@ class Config(db.Model):
 
 
 # ============================================================
+# MODELO DE SEDE
+# ============================================================
+class Sede(db.Model):
+    """Sede / campus (TEO/HUA) for multitenancy."""
+    __tablename__ = 'sedes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), nullable=False)
+    codigo = db.Column(db.String(10), unique=True, nullable=False)
+    direccion = db.Column(db.String(255), nullable=True)
+    activa = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nombre': self.nombre,
+            'codigo': self.codigo,
+            'direccion': self.direccion,
+            'activa': self.activa,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# ============================================================
 # MODELO DE ADMIN
 # ============================================================
 class Admin(db.Model):
@@ -44,6 +69,17 @@ class Admin(db.Model):
     nombre = db.Column(db.String(120), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    role = db.Column(db.Enum('general_admin', 'sede_admin', name='admin_role_enum'), nullable=False, default='general_admin')
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+
+    sede = db.relationship('Sede', backref='admins')
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "(role='general_admin' AND sede_id IS NULL) OR (role='sede_admin' AND sede_id IS NOT NULL)",
+            name='ck_admin_role_sede'
+        ),
+    )
     
     # Relaciones
     notas_remision = db.relationship('NotaRemision', backref='creado_por', lazy='dynamic')
@@ -62,6 +98,9 @@ class Admin(db.Model):
             'username': self.username,
             'email': self.email,
             'nombre': self.nombre,
+            'role': self.role,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -135,10 +174,11 @@ class Alumno(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=False, index=True)
     activo = db.Column(db.Boolean, default=True)
     fecha_registro = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Temp credentials (bulk email 24h expiry)
     temp_password_hash = db.Column(db.String(256), nullable=True)
     temp_password_expires_at = db.Column(db.DateTime, nullable=True)
@@ -149,6 +189,8 @@ class Alumno(db.Model):
     examen_idiomas = db.Column(db.Boolean, default=False)
     credenciales_completas = db.Column(db.Boolean, default=False)
     documentacion_completa = db.Column(db.Boolean, default=False)
+
+    sede = db.relationship('Sede', backref='alumnos')
     
     # Relaciones con cascade para eliminación completa
     calificaciones = db.relationship('Calificacion', backref='alumno', 
@@ -184,6 +226,8 @@ class Alumno(db.Model):
             'nombre_completo': self.nombre_completo,
             'email': self.email,
             'carrera_id': self.carrera_id,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
             'activo': self.activo,
             'fecha_registro': self.fecha_registro.isoformat() if self.fecha_registro else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -207,6 +251,7 @@ class Alumno(db.Model):
             'nombre_completo': self.nombre_completo,
             'email': self.email,
             'carrera': self.carrera.nombre if self.carrera else None,
+            'sede_id': self.sede_id,
             'servicio_social': self.servicio_social,
             'examen_idiomas': self.examen_idiomas,
             'credenciales_completas': self.credenciales_completas,
@@ -420,8 +465,11 @@ class Profesor(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     activo = db.Column(db.Boolean, default=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    sede = db.relationship('Sede', backref='profesores')
     
     # Relaciones con cascade
     asignaciones = db.relationship('Asignacion', backref='profesor', 
@@ -446,6 +494,8 @@ class Profesor(db.Model):
             'titulo': self.titulo,
             'email': self.email,
             'activo': self.activo,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -460,11 +510,13 @@ class Grupo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), nullable=False)  #ej: "A", "B"
     carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=False, index=True)
     activo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relaciones
     carrera = db.relationship('Carrera', backref='grupos')
+    sede = db.relationship('Sede', backref='grupos')
     asignaciones = db.relationship('Asignacion', backref='grupo', lazy='dynamic')
     integrantes = db.relationship('GrupoIntegrante', backref='grupo', lazy='dynamic', cascade='all, delete-orphan')
     
@@ -474,6 +526,8 @@ class Grupo(db.Model):
             'nombre': self.nombre,
             'carrera_id': self.carrera_id,
             'carrera': self.carrera.to_dict() if self.carrera else None,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
             'activo': self.activo,
             'total_integrantes': self.integrantes.count(),
             'created_at': self.created_at.isoformat() if self.created_at else None
@@ -549,4 +603,98 @@ class Asignacion(db.Model):
         }
 
 
+# ============================================================
+# MODELO WIKI — Sede-scoped manuals
+# ============================================================
+class WikiPage(db.Model):
+    """Sede-scoped wiki page. sede_id NULL = global visible to all tenants."""
+    __tablename__ = 'wiki_pages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    slug = db.Column(db.String(120), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    body_markdown = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    sede = db.relationship('Sede', backref='wiki_pages')
+    author = db.relationship('Admin', backref='wiki_pages', foreign_keys=[created_by])
+
+    __table_args__ = (
+        db.UniqueConstraint('sede_id', 'slug', name='uq_wiki_slug_sede'),
+        db.Index('ix_wiki_pages_sede_slug', 'sede_id', 'slug'),
+    )
+
+    def to_dict(self, include_body=True):
+        data = {
+            'id': self.id,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
+            'slug': self.slug,
+            'title': self.title,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_body:
+            data['body_markdown'] = self.body_markdown
+            data['body'] = self.body_markdown
+        return data
+
+
+class WikiRevision(db.Model):
+    """Immutable revision of a WikiPage."""
+    __tablename__ = 'wiki_revisions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_id = db.Column(db.Integer, db.ForeignKey('wiki_pages.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=True)
+    body_markdown = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    page = db.relationship('WikiPage', backref=db.backref('revisions', cascade='all, delete-orphan', lazy='dynamic'))
+    author = db.relationship('Admin', backref='wiki_revisions', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'page_id': self.page_id,
+            'title': self.title,
+            'body_markdown': self.body_markdown,
+            'body': self.body_markdown,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WikiAttachment(db.Model):
+    """File attached to a wiki page stored on disk."""
+    __tablename__ = 'wiki_attachments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_id = db.Column(db.Integer, db.ForeignKey('wiki_pages.id', ondelete='CASCADE'), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    path = db.Column(db.String(500), nullable=False)
+    mime = db.Column(db.String(120), nullable=True)
+    size = db.Column(db.Integer, nullable=False, default=0)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    page = db.relationship('WikiPage', backref=db.backref('attachments', cascade='all, delete-orphan', lazy='dynamic'))
+    author = db.relationship('Admin', backref='wiki_attachments', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'page_id': self.page_id,
+            'filename': self.filename,
+            'path': self.path,
+            'mime': self.mime,
+            'size': self.size,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 

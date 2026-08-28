@@ -3,7 +3,7 @@ Rutas para gestión de Asignaciones
 (profesor → materia → grupo → fechas)
 """
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, Asignacion, Profesor, Materia, Grupo
@@ -35,16 +35,26 @@ def get_asignaciones():
     except ValueError:
         per_page = 20
     
-    query = Asignacion.query
+    query = Asignacion.query.join(Grupo, Asignacion.grupo_id == Grupo.id)
+    # sede scoping: sede_admin only sees asignaciones where grupo.sede_id == token.sede
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin':
+        token_sede = claims.get('sede_id')
+        query = query.filter(Grupo.sede_id == token_sede)
+    else:
+        # general_admin optional ?sede_id filter
+        qs_sede = request.args.get('sede_id', type=int)
+        if qs_sede is not None:
+            query = query.filter(Grupo.sede_id == qs_sede)
     
     if profesor_id:
-        query = query.filter_by(profesor_id=profesor_id)
+        query = query.filter(Asignacion.profesor_id == profesor_id)
     if materia_id:
-        query = query.filter_by(materia_id=materia_id)
+        query = query.filter(Asignacion.materia_id == materia_id)
     if grupo_id:
-        query = query.filter_by(grupo_id=grupo_id)
+        query = query.filter(Asignacion.grupo_id == grupo_id)
     if activo is not None:
-        query = query.filter_by(activo=activo.lower() == 'true')
+        query = query.filter(Asignacion.activo == (activo.lower() == 'true'))
     
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     
@@ -57,13 +67,30 @@ def get_asignaciones():
     }), 200
 
 
+def _asig_forbidden(asignacion):
+    claims = get_jwt()
+    if claims.get('role') != 'sede_admin':
+        return False
+    token_sede = claims.get('sede_id')
+    grupo = db.session.get(Grupo, asignacion.grupo_id)
+    if grupo and grupo.sede_id != token_sede:
+        return True
+    # also check profesor sede if exists
+    prof = db.session.get(Profesor, asignacion.profesor_id)
+    if prof and prof.sede_id and prof.sede_id != token_sede:
+        return True
+    return False
+
+
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['GET'])
 @jwt_required()
 def get_asignacion(asignacion_id):
     """
-    Obtiene una asignacion por ID
+    Obtiene una asignacion por ID — scoped
     """
     asignacion = Asignacion.query.get_or_404(asignacion_id)
+    if _asig_forbidden(asignacion):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     return jsonify({'asignacion': asignacion.to_dict()}), 200
 
 
@@ -99,6 +126,15 @@ def create_asignacion():
     grupo = db.session.get(Grupo, data['grupo_id'])
     if not grupo:
         return jsonify({'error': 'Grupo no encontrado'}), 404
+
+    # sede scoping: all must belong to same sede for sede_admin
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin':
+        token_sede = claims.get('sede_id')
+        if grupo.sede_id != token_sede:
+            return jsonify({'error': 'Cross-sede grupo forbidden', 'code': 'CROSS_SEDE'}), 403
+        if profesor.sede_id and profesor.sede_id != token_sede:
+            return jsonify({'error': 'Cross-sede profesor forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Parsear fechas
     try:
@@ -148,10 +184,12 @@ def create_asignacion():
 @admin_required
 def update_asignacion(asignacion_id):
     """
-    Actualiza una asignacion
+    Actualiza una asignacion — scoped
     Body: { profesor_id, materia_id, grupo_id, fecha_inicio, fecha_fin, activo }
     """
     asignacion = Asignacion.query.get_or_404(asignacion_id)
+    if _asig_forbidden(asignacion):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data:
@@ -208,9 +246,11 @@ def update_asignacion(asignacion_id):
 @admin_required
 def delete_asignacion(asignacion_id):
     """
-    Elimina una asignacion
+    Elimina una asignacion — scoped
     """
     asignacion = Asignacion.query.get_or_404(asignacion_id)
+    if _asig_forbidden(asignacion):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     db.session.delete(asignacion)
     try:

@@ -17,7 +17,7 @@ from flask_jwt_extended import create_access_token
 os.environ["FLASK_ENV"] = "testing"
 
 from app import create_app
-from models import db, Alumno, Carrera, Admin
+from models import db, Alumno, Carrera, Admin, Sede
 from config import TestingConfig
 
 
@@ -26,9 +26,16 @@ def app_ctx():
     app = create_app(TestingConfig)
     with app.app_context():
         db.create_all()
-        # Seed carrera
+        # Seed carrera and sedes (TEO/HUA) for NOT NULL constraints (migration 003)
         carrera = Carrera(nombre="Test Carr", codigo="TST001", descripcion="test")
         db.session.add(carrera)
+        db.session.flush()
+        # Ensure TEO sede exists for Alumno.sede_id NOT NULL
+        teo = Sede(nombre="Teotitlan", codigo="TEO", direccion="Teotitlan", activa=True)
+        db.session.add(teo)
+        # Optionally HUA for completeness
+        hua = Sede(nombre="Huautla", codigo="HUA", direccion="Huautla", activa=True)
+        db.session.add(hua)
         db.session.commit()
         yield app
         db.session.remove()
@@ -51,6 +58,8 @@ def _admin_token(app_ctx):
 
 
 def _alumno_token(app_ctx, carrera_id):
+    teo = Sede.query.filter_by(codigo="TEO").first()
+    sede_id = teo.id if teo else 1
     alumno = Alumno(
         numero_control="12345678",
         nombre="Juan",
@@ -58,6 +67,7 @@ def _alumno_token(app_ctx, carrera_id):
         email="juan@test.com",
         password_hash="x",
         carrera_id=carrera_id,
+        sede_id=sede_id,
         activo=True,
     )
     alumno.set_password("alum123")
@@ -68,7 +78,10 @@ def _alumno_token(app_ctx, carrera_id):
     return token, alumno
 
 
-def _make_alumno(email, carrera_id, nc):
+def _make_alumno(email, carrera_id, nc, sede_id=None):
+    if sede_id is None:
+        teo = Sede.query.filter_by(codigo="TEO").first()
+        sede_id = teo.id if teo else 1
     a = Alumno(
         numero_control=nc,
         nombre="Test",
@@ -76,6 +89,7 @@ def _make_alumno(email, carrera_id, nc):
         email=email,
         password_hash="x",
         carrera_id=carrera_id,
+        sede_id=sede_id,
         activo=True,
     )
     a.set_password("oldpass")

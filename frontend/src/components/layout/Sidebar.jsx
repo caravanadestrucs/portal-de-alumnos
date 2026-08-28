@@ -19,6 +19,8 @@ import {
   Upload,
   Settings,
   FileDown,
+  Building2,
+  Library,
 } from 'lucide-react';
 
 const adminNavItems = [
@@ -34,6 +36,8 @@ const adminNavItems = [
   { path: '/admin/importar', icon: Upload, label: 'Importar' },
   { path: '/admin/boletas', icon: FileDown, label: 'Boletas' },
   { path: '/admin/admins', icon: UserCheck, label: 'Administradores' },
+  { path: '/admin/sedes', icon: Building2, label: 'Sedes', generalOnly: true },
+  { path: '/admin/wiki', icon: Library, label: 'Wiki' },
   { path: '/admin/configuracion', icon: Settings, label: 'Configuración' },
   { path: '/admin/exportar', icon: Download, label: 'Exportar' },
 ];
@@ -52,12 +56,16 @@ const profesorNavItems = [
 
 export default function Sidebar({ isOpen, setIsOpen, collapsed, onToggleCollapse }) {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isGeneralAdmin } = useAuth();
   const isAdmin = user?.rol === 'admin';
   const isAlumno = user?.rol === 'alumno';
   const isProfesor = user?.rol === 'profesor';
 
-  const navItems = isAdmin ? adminNavItems : isProfesor ? profesorNavItems : alumnoNavItems;
+  const rawNav = isAdmin ? adminNavItems : isProfesor ? profesorNavItems : alumnoNavItems;
+  const navItems = rawNav.filter((item) => {
+    if (item.generalOnly && !isGeneralAdmin) return false;
+    return true;
+  });
   const defaultPath = isAdmin ? '/admin' : isProfesor ? '/profesor' : '/alumno';
 
   const handleLogout = async () => {

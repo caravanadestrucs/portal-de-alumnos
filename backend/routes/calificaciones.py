@@ -10,11 +10,18 @@ from utils.decorators import admin_required
 calificaciones_bp = Blueprint('calificaciones', __name__)
 
 
+def _alumno_sede_forbidden(alumno):
+    claims = get_jwt()
+    if (claims.get('user_type') or claims.get('type')) == 'admin' and claims.get('role') == 'sede_admin':
+        return alumno.sede_id != claims.get('sede_id')
+    return False
+
+
 @calificaciones_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 def get_alumno_calificaciones(alumno_id):
     """
-    Obtiene todas las calificaciones de un alumno
+    Obtiene todas las calificaciones de un alumno — scoped via alumno.sede_id
     """
     claims = get_jwt()
     
@@ -23,6 +30,8 @@ def get_alumno_calificaciones(alumno_id):
         return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
+    if _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Filtros opcionales
     periodo = request.args.get('periodo')
@@ -72,6 +81,8 @@ def create_or_update_calificacion():
     alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
+    if _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Verificar que la materia exista
     materia = db.session.get(Materia, data['materia_id'])
@@ -148,7 +159,7 @@ def create_or_update_calificacion():
 @jwt_required()
 def get_historial(alumno_id):
     """
-    Obtiene el historial completo del alumno (para el portal)
+    Obtiene el historial completo del alumno (para el portal) — scoped
     Incluye calificaciones, promedio general, etc.
     """
     claims = get_jwt()
@@ -158,6 +169,8 @@ def get_historial(alumno_id):
         return jsonify({'error': 'No tienes permiso para ver este historial'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
+    if _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Obtener todas las calificaciones
     calificaciones = Calificacion.query.filter_by(alumno_id=alumno_id)\
@@ -200,13 +213,17 @@ def get_historial(alumno_id):
 @jwt_required()
 def get_calificacion(id):
     """
-    Obtiene una calificación por ID
+    Obtiene una calificación por ID — scoped
     """
     calificacion = Calificacion.query.get_or_404(id)
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != calificacion.alumno_id:
         return jsonify({'error': 'No tienes permiso para ver esta calificación'}), 403
+    # admin sede check via alumno
+    alumno = db.session.get(Alumno, calificacion.alumno_id)
+    if alumno and _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     return jsonify({'calificacion': calificacion.to_dict()}), 200
 
@@ -215,9 +232,12 @@ def get_calificacion(id):
 @admin_required
 def delete_calificacion(id):
     """
-    Elimina una calificación (admin)
+    Elimina una calificación (admin) — scoped via alumno
     """
     calificacion = Calificacion.query.get_or_404(id)
+    alumno = db.session.get(Alumno, calificacion.alumno_id)
+    if alumno and _alumno_sede_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     try:
         db.session.delete(calificacion)
@@ -286,6 +306,9 @@ def bulk_create_calificaciones():
             
             if not alumno or not materia:
                 errors.append(f"Fila {i}: Alumno o materia no encontrada")
+                continue
+            if _alumno_sede_forbidden(alumno):
+                errors.append(f"Fila {i}: Cross-sede alumno {alumno.id} forbidden")
                 continue
             
             # Buscar existente
