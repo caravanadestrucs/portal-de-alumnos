@@ -72,7 +72,25 @@ def scope_wiki(query, column):
         return query
 
     # alumno/profesor: try to show global + own sede if known
-    # For PR1, alumno token has no sede_id, so just global
     if sede_id is not None:
         return query.filter(sa_or(column.is_(None), column == sede_id))
+    # Fallback: try to load sede_id from DB for alumno/profesor if token lacks it
+    user_type = claims.get("user_type") or claims.get("type")
+    user_id = claims.get("id")
+    if user_type == "alumno" and user_id is not None:
+        try:
+            from models import Alumno
+            alumno = db.session.get(Alumno, int(user_id))
+            if alumno and alumno.sede_id is not None:
+                return query.filter(sa_or(column.is_(None), column == alumno.sede_id))
+        except Exception:
+            pass
+    if user_type == "profesor" and user_id is not None:
+        try:
+            from models import Profesor
+            prof = db.session.get(Profesor, int(user_id))
+            if prof and getattr(prof, "sede_id", None) is not None:
+                return query.filter(sa_or(column.is_(None), column == prof.sede_id))
+        except Exception:
+            pass
     return query.filter(column.is_(None))

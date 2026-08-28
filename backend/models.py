@@ -174,11 +174,11 @@ class Alumno(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
-    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=False, index=True)
     activo = db.Column(db.Boolean, default=True)
     fecha_registro = db.Column(db.Date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Temp credentials (bulk email 24h expiry)
     temp_password_hash = db.Column(db.String(256), nullable=True)
     temp_password_expires_at = db.Column(db.DateTime, nullable=True)
@@ -510,7 +510,7 @@ class Grupo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(50), nullable=False)  #ej: "A", "B"
     carrera_id = db.Column(db.Integer, db.ForeignKey('carreras.id'), nullable=False)
-    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=False, index=True)
     activo = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -600,5 +600,101 @@ class Asignacion(db.Model):
             'puede_editar': self.puede_editar_calificaciones(),
             'activo': self.activo,
             'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# ============================================================
+# MODELO WIKI — Sede-scoped manuals
+# ============================================================
+class WikiPage(db.Model):
+    """Sede-scoped wiki page. sede_id NULL = global visible to all tenants."""
+    __tablename__ = 'wiki_pages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    slug = db.Column(db.String(120), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    body_markdown = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    sede = db.relationship('Sede', backref='wiki_pages')
+    author = db.relationship('Admin', backref='wiki_pages', foreign_keys=[created_by])
+
+    __table_args__ = (
+        db.UniqueConstraint('sede_id', 'slug', name='uq_wiki_slug_sede'),
+        db.Index('ix_wiki_pages_sede_slug', 'sede_id', 'slug'),
+    )
+
+    def to_dict(self, include_body=True):
+        data = {
+            'id': self.id,
+            'sede_id': self.sede_id,
+            'sede': self.sede.to_dict() if self.sede else None,
+            'slug': self.slug,
+            'title': self.title,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_body:
+            data['body_markdown'] = self.body_markdown
+            data['body'] = self.body_markdown
+        return data
+
+
+class WikiRevision(db.Model):
+    """Immutable revision of a WikiPage."""
+    __tablename__ = 'wiki_revisions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_id = db.Column(db.Integer, db.ForeignKey('wiki_pages.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=True)
+    body_markdown = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    page = db.relationship('WikiPage', backref=db.backref('revisions', cascade='all, delete-orphan', lazy='dynamic'))
+    author = db.relationship('Admin', backref='wiki_revisions', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'page_id': self.page_id,
+            'title': self.title,
+            'body_markdown': self.body_markdown,
+            'body': self.body_markdown,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WikiAttachment(db.Model):
+    """File attached to a wiki page stored on disk."""
+    __tablename__ = 'wiki_attachments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_id = db.Column(db.Integer, db.ForeignKey('wiki_pages.id', ondelete='CASCADE'), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    path = db.Column(db.String(500), nullable=False)
+    mime = db.Column(db.String(120), nullable=True)
+    size = db.Column(db.Integer, nullable=False, default=0)
+    created_by = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    page = db.relationship('WikiPage', backref=db.backref('attachments', cascade='all, delete-orphan', lazy='dynamic'))
+    author = db.relationship('Admin', backref='wiki_attachments', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'page_id': self.page_id,
+            'filename': self.filename,
+            'path': self.path,
+            'mime': self.mime,
+            'size': self.size,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 

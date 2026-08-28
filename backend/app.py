@@ -75,6 +75,11 @@ def create_app(config_name=None):
     # Inicializar base de datos
     db.init_app(app)
     
+    # Ensure wiki_attachments directory exists
+    wiki_attach_path = os.path.join(os.path.dirname(__file__), 'instance', 'wiki_attachments')
+    if not os.path.exists(wiki_attach_path):
+        os.makedirs(wiki_attach_path, exist_ok=True)
+
     # Registrar blueprints
     from routes.auth import auth_bp
     from routes.alumnos import alumnos_bp
@@ -92,6 +97,8 @@ def create_app(config_name=None):
     from routes.settings import settings_bp
     from routes.imports import imports_bp
     from routes.boletas import boletas_bp
+    from routes.sedes import sedes_bp
+    from routes.wiki import wiki_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(alumnos_bp, url_prefix='/api/alumnos')
@@ -109,6 +116,8 @@ def create_app(config_name=None):
     app.register_blueprint(settings_bp, url_prefix='/api/config')
     app.register_blueprint(imports_bp, url_prefix='/api/imports')
     app.register_blueprint(boletas_bp, url_prefix='/api/boletas')
+    app.register_blueprint(sedes_bp, url_prefix='/api/sedes')
+    app.register_blueprint(wiki_bp, url_prefix='/api/wiki')
     
     # Health check endpoint
     @app.route('/api/health')

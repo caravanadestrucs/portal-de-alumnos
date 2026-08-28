@@ -2,11 +2,12 @@
 Rutas para gestión de Grupos
 """
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 
 from sqlalchemy.orm import joinedload
-from models import db, Grupo, GrupoIntegrante, Alumno, Carrera
+from models import db, Grupo, GrupoIntegrante, Alumno, Carrera, Sede
 from utils.decorators import admin_required
+from utils.scope import scope_by_sede
 
 grupos_bp = Blueprint('grupos', __name__)
 
@@ -30,7 +31,7 @@ def get_grupos():
     except ValueError:
         per_page = 20
     
-    query = Grupo.query.options(joinedload(Grupo.carrera))
+    query = scope_by_sede(Grupo.query.options(joinedload(Grupo.carrera)), Grupo.sede_id)
     
     if carrera_id:
         query = query.filter_by(carrera_id=carrera_id)
@@ -50,13 +51,22 @@ def get_grupos():
     }), 200
 
 
+def _grupo_sede_forbidden(grupo):
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin' and grupo.sede_id != claims.get('sede_id'):
+        return True
+    return False
+
+
 @grupos_bp.route('/<int:grupo_id>', methods=['GET'])
 @jwt_required()
 def get_grupo(grupo_id):
     """
-    Obtiene un grupo por ID con sus integrantes
+    Obtiene un grupo por ID con sus integrantes — scoped
     """
     grupo = Grupo.query.get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     return jsonify({
         'grupo': grupo.to_dict(),
@@ -81,6 +91,22 @@ def create_grupo():
     for field in required:
         if not data.get(field):
             return jsonify({'error': f'El campo {field} es requerido'}), 400
+
+    # sede_id validation
+    claims = get_jwt()
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    sede_id = data.get('sede_id')
+    if not sede_id:
+        return jsonify({'error': 'sede_id is required', 'code': 'SEDE_REQUIRED'}), 400
+    try:
+        sede_id = int(sede_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'sede_id must be integer'}), 400
+    if role == 'sede_admin' and token_sede != sede_id:
+        return jsonify({'error': 'Cross-sede creation forbidden', 'code': 'CROSS_SEDE'}), 403
+    if not db.session.get(Sede, sede_id):
+        return jsonify({'error': 'Sede not found'}), 404
     
     # Verificar carrera existe
     carrera = db.session.get(Carrera, data['carrera_id'])
@@ -99,6 +125,7 @@ def create_grupo():
     grupo = Grupo(
         nombre=data['nombre'],
         carrera_id=data['carrera_id'],
+        sede_id=sede_id,
         activo=data.get('activo', True)
     )
     
@@ -121,10 +148,12 @@ def create_grupo():
 @admin_required
 def update_grupo(grupo_id):
     """
-    Actualiza un grupo
+    Actualiza un grupo — scoped
     Body: { nombre, carrera_id, activo }
     """
     grupo = Grupo.query.get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data:
@@ -154,9 +183,11 @@ def update_grupo(grupo_id):
 @admin_required
 def delete_grupo(grupo_id):
     """
-    Elimina un grupo y sus integrantes
+    Elimina un grupo y sus integrantes — scoped
     """
     grupo = Grupo.query.get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     db.session.delete(grupo)
     try:
@@ -177,9 +208,11 @@ def delete_grupo(grupo_id):
 @jwt_required()
 def get_integrantes(grupo_id):
     """
-    Obtiene los integrantes de un grupo
+    Obtiene los integrantes de un grupo — scoped
     """
     grupo = Grupo.query.options(joinedload(Grupo.carrera)).get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     integrantes = GrupoIntegrante.query.filter_by(grupo_id=grupo_id).options(joinedload(GrupoIntegrante.alumno)).all()
     
@@ -195,10 +228,12 @@ def get_integrantes(grupo_id):
 @admin_required
 def add_integrante(grupo_id):
     """
-    Agrega un alumno al grupo
+    Agrega un alumno al grupo — scoped by alumno sede
     Body: { alumno_id }
     """
     grupo = Grupo.query.get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data or not data.get('alumno_id'):
@@ -208,6 +243,12 @@ def add_integrante(grupo_id):
     alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'Alumno no encontrado'}), 404
+    # Cross-sede check for sede_admin: alumno sede must match grupo sede / token
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin':
+        token_sede = claims.get('sede_id')
+        if alumno.sede_id != token_sede or grupo.sede_id != token_sede:
+            return jsonify({'error': 'Cross-sede integrante forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Verificar que no esté ya en el grupo
     existing = GrupoIntegrante.query.filter_by(
@@ -265,10 +306,12 @@ def remove_integrante(grupo_id, alumno_id):
 @admin_required
 def add_integrantes_bulk(grupo_id):
     """
-    Agrega múltiples alumnos al grupo
+    Agrega múltiples alumnos al grupo — scoped
     Body: { alumno_ids: [1, 2, 3] }
     """
     grupo = Grupo.query.get_or_404(grupo_id)
+    if _grupo_sede_forbidden(grupo):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data or not data.get('alumno_ids'):
@@ -278,6 +321,13 @@ def add_integrantes_bulk(grupo_id):
     errors = []
     
     for aid in data['alumno_ids']:
+        # sede check for each alumno if sede_admin
+        alumno_obj = db.session.get(Alumno, aid)
+        if alumno_obj:
+            claims = get_jwt()
+            if claims.get('role') == 'sede_admin' and alumno_obj.sede_id != claims.get('sede_id'):
+                errors.append(f'Alumno {aid} cross-sede forbidden')
+                continue
         # Verificar que no esté ya en el grupo
         existing = GrupoIntegrante.query.filter_by(
             grupo_id=grupo_id,

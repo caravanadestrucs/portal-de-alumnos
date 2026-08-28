@@ -168,8 +168,12 @@ def test_admin_role_check_sede_admin_with_sede_passes(app_ctx):
 
 
 def test_alumno_sede_id_nullable_initially(app_ctx):
-    """Alumno must be creatable WITHOUT sede_id in phase1 (nullable step)."""
+    """Post-migration 003: Alumno without sede_id must FAIL (NOT NULL). Original phase1 nullable test is now hardened."""
+    from sqlalchemy.exc import IntegrityError
     carrera = Carrera.query.first()
+    # Verify model is now NOT NULL
+    assert Alumno.__table__.c.sede_id.nullable is False, "Alumno.sede_id should be NOT NULL after migration 003"
+    # Try to create without sede_id — should fail
     alumno = Alumno(
         numero_control="99990011",
         nombre="Ana",
@@ -178,13 +182,41 @@ def test_alumno_sede_id_nullable_initially(app_ctx):
         password_hash="x",
         carrera_id=carrera.id,
         activo=True,
-        sede_id=None,  # RED if column missing
+        sede_id=None,
     )
     alumno.set_password("pass123")
     db.session.add(alumno)
+    with pytest.raises((IntegrityError, Exception)):
+        db.session.commit()
+    db.session.rollback()
+    # Verify PRAGMA table_info shows notnull=1 for alumnos.sede_id
+    from sqlalchemy import text
+    rows = db.session.execute(text("PRAGMA table_info(alumnos)")).fetchall()
+    for col in rows:
+        if col[1] == "sede_id":
+            assert col[3] == 1, f"alumnos.sede_id pragma notnull should be 1, got {col}"
+    # Positive case: with valid sede_id it should succeed
+    from models import Sede
+    sede = Sede.query.first()
+    if not sede:
+        sede = Sede(nombre="Teotitlan", codigo="TEO")
+        db.session.add(sede)
+        db.session.commit()
+    alumno2 = Alumno(
+        numero_control="99990012",
+        nombre="Ana2",
+        apellido_paterno="Perez",
+        email="ana2.null@test.com",
+        password_hash="x",
+        carrera_id=carrera.id,
+        activo=True,
+        sede_id=sede.id,
+    )
+    alumno2.set_password("pass123")
+    db.session.add(alumno2)
     db.session.commit()
-    fetched = Alumno.query.filter_by(email="ana.null@test.com").first()
-    assert fetched.sede_id is None
+    fetched = Alumno.query.filter_by(email="ana2.null@test.com").first()
+    assert fetched.sede_id == sede.id
 
 
 def test_alumno_sede_id_has_index(app_ctx):
@@ -198,23 +230,33 @@ def test_alumno_sede_id_has_index(app_ctx):
 
 
 def test_grupo_profesor_sede_id_nullable_and_indexed(app_ctx):
-    """Grupo and Profesor must have nullable sede_id FK with index."""
+    """Grupo must now be NOT NULL (migration 003) while Profesor remains nullable."""
     from models import Sede
     sede = Sede(nombre="Teotitlan", codigo="TEO")
     db.session.add(sede)
     db.session.commit()
     carrera = Carrera.query.first()
-    # Grupo nullable
+    # Grupo without sede_id should now FAIL (NOT NULL)
+    from sqlalchemy.exc import IntegrityError
+    assert Grupo.__table__.c.sede_id.nullable is False, "Grupo.sede_id should be NOT NULL after migration 003"
     g_null = Grupo(nombre="A", carrera_id=carrera.id, sede_id=None)
     db.session.add(g_null)
-    db.session.commit()
-    assert g_null.sede_id is None
-    # Grupo with sede
+    with pytest.raises((IntegrityError, Exception)):
+        db.session.commit()
+    db.session.rollback()
+    # Verify PRAGMA
+    from sqlalchemy import text
+    rows = db.session.execute(text("PRAGMA table_info(grupos)")).fetchall()
+    for col in rows:
+        if col[1] == "sede_id":
+            assert col[3] == 1, f"grupos.sede_id pragma notnull should be 1, got {col}"
+    # Grupo with sede should succeed
     g_sede = Grupo(nombre="B", carrera_id=carrera.id, sede_id=sede.id)
     db.session.add(g_sede)
     db.session.commit()
     assert g_sede.sede_id == sede.id
-    # Profesor nullable
+    # Profesor should still be nullable
+    assert Profesor.__table__.c.sede_id.nullable is True, "Profesor.sede_id should remain nullable"
     prof_null = Profesor(
         numero_empleado="PROF-TEST1",
         nombre="Juan",
@@ -438,9 +480,14 @@ def test_general_admin_required_allows_general_blocks_sede(app_ctx, client):
     from utils.decorators import general_admin_required
     import inspect
     assert callable(general_admin_required)
-    # Verify file contains role check
+    # Verify file contains role check (robust to cwd)
     import pathlib
-    dec_content = pathlib.Path("utils/decorators.py").read_text(encoding="utf-8")
+    dec_path = pathlib.Path(__file__).resolve().parents[1] / "utils" / "decorators.py"
+    if not dec_path.exists():
+        dec_path = pathlib.Path("utils") / "decorators.py"
+    if not dec_path.exists():
+        dec_path = pathlib.Path("backend") / "utils" / "decorators.py"
+    dec_content = dec_path.read_text(encoding="utf-8")
     assert "general_admin_required" in dec_content
     assert "role" in dec_content
     assert "general_admin" in dec_content
@@ -495,7 +542,12 @@ def test_general_admin_required_allows_general_blocks_sede(app_ctx, client):
 def test_sede_scoped_admin_required_allows_both_admins(app_ctx):
     """sede_scoped_admin_required must allow both general and sede_admin, but 403 for alumno/anon."""
     import pathlib
-    content = pathlib.Path("utils/decorators.py").read_text(encoding="utf-8")
+    dec_path2 = pathlib.Path(__file__).resolve().parents[1] / "utils" / "decorators.py"
+    if not dec_path2.exists():
+        dec_path2 = pathlib.Path("utils") / "decorators.py"
+    if not dec_path2.exists():
+        dec_path2 = pathlib.Path("backend") / "utils" / "decorators.py"
+    content = dec_path2.read_text(encoding="utf-8")
     assert "sede_scoped_admin_required" in content
     # Should check for admin type
     assert "sede_scoped" in content
@@ -644,10 +696,23 @@ def test_scope_by_sede_empty_result_when_no_match(app_ctx):
 # 1.3 seed_sedes heuristic + dry-run
 # ============================================================
 
+def _resolve_seed_path():
+    import pathlib
+    # Robust to cwd: tests run from backend or project root
+    p1 = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "seed_sedes.py"
+    if p1.exists():
+        return p1
+    p2 = pathlib.Path("backend") / "scripts" / "seed_sedes.py"
+    if p2.exists():
+        return p2
+    p3 = pathlib.Path("scripts") / "seed_sedes.py"
+    return p3
+
 def test_heuristic_folder_priority():
     """Heuristic folder > numero_control priority must be implemented."""
     import importlib.util, pathlib
-    spec = importlib.util.spec_from_file_location("seed_sedes", pathlib.Path("scripts/seed_sedes.py").as_posix())
+    seed_path = _resolve_seed_path()
+    spec = importlib.util.spec_from_file_location("seed_sedes", seed_path.as_posix())
     assert spec is not None, "scripts/seed_sedes.py not found"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -679,14 +744,15 @@ def test_heuristic_folder_priority():
     # For robustness, call with explicit sede map
     # Ensure second scenario also returns HUA
     # We'll just assert that folder detection exists via file content
-    content = pathlib.Path("scripts/seed_sedes.py").read_text(encoding="utf-8")
+    content = seed_path.read_text(encoding="utf-8")
     assert "folder" in content.lower()
 
 
 def test_heuristic_numero_control_regex(app_ctx):
     """Numero_control containing TEO/HUA must map correctly."""
     import importlib.util, pathlib
-    spec = importlib.util.spec_from_file_location("seed_sedes2", pathlib.Path("scripts/seed_sedes.py").as_posix())
+    seed_path = _resolve_seed_path()
+    spec = importlib.util.spec_from_file_location("seed_sedes2", seed_path.as_posix())
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     fn = getattr(mod, "infer_sede", None) or getattr(mod, "detect_sede", None) or getattr(mod, "heuristic", None)
@@ -715,7 +781,8 @@ def test_heuristic_numero_control_regex(app_ctx):
 def test_heuristic_fallback_flagged(app_ctx):
     """Fallback when no pattern must be flagged for manual_review."""
     import importlib.util, pathlib
-    spec = importlib.util.spec_from_file_location("seed_sedes3", pathlib.Path("scripts/seed_sedes.py").as_posix())
+    seed_path = _resolve_seed_path()
+    spec = importlib.util.spec_from_file_location("seed_sedes3", seed_path.as_posix())
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     fn = getattr(mod, "infer_sede", None) or getattr(mod, "detect_sede", None) or getattr(mod, "heuristic", None)
@@ -735,7 +802,7 @@ def test_heuristic_fallback_flagged(app_ctx):
         assert flagged is True or "fallback" in str(res).lower() or "flag" in str(res).lower()
     else:
         # if returns just code, check file mentions fallback flagged
-        content = pathlib.Path("scripts/seed_sedes.py").read_text(encoding="utf-8")
+        content = _resolve_seed_path().read_text(encoding="utf-8")
         assert "fallback" in content.lower()
         assert "flag" in content.lower()
 
@@ -743,18 +810,25 @@ def test_heuristic_fallback_flagged(app_ctx):
 def test_seed_idempotent_and_dry_run_zero_writes(app_ctx):
     """seed_sedes --dry-run must report counts and perform zero DB writes."""
     import importlib.util, pathlib
-    # Ensure seed file exists
-    p = pathlib.Path("scripts/seed_sedes.py")
-    assert p.exists()
+    # Ensure seed file exists (robust to cwd)
+    p = _resolve_seed_path()
+    assert p.exists(), f"seed_sedes.py not found at {p}"
     # Check dry-run logic exists in file
     content = p.read_text(encoding="utf-8")
     assert "dry-run" in content or "dry_run" in content
     assert "manual_review" in content.lower()
-    # Functional: create 2 alumnos null, run dry-run helper if exists
+    # Functional: create 2 alumnos with valid sede_id (NOT NULL after migration 003)
+    # Previously this created with sede_id=None to test dry-run backfill, but now NOT NULL so we use valid sede
+    from models import Sede
+    sede_teo = Sede.query.filter_by(codigo="TEO").first()
+    if not sede_teo:
+        sede_teo = Sede(nombre="Teotitlan", codigo="TEO")
+        db.session.add(sede_teo)
+        db.session.commit()
     carrera = Carrera.query.first()
-    a1 = Alumno(numero_control="93000001", nombre="Dry1", apellido_paterno="A", email="dry1@test.com", password_hash="x", carrera_id=carrera.id, sede_id=None)
+    a1 = Alumno(numero_control="93000001", nombre="Dry1", apellido_paterno="A", email="dry1@test.com", password_hash="x", carrera_id=carrera.id, sede_id=sede_teo.id)
     a1.set_password("pass123")
-    a2 = Alumno(numero_control="9400TEO01", nombre="Dry2", apellido_paterno="B", email="dry2@test.com", password_hash="x", carrera_id=carrera.id, sede_id=None)
+    a2 = Alumno(numero_control="9400TEO01", nombre="Dry2", apellido_paterno="B", email="dry2@test.com", password_hash="x", carrera_id=carrera.id, sede_id=sede_teo.id)
     a2.set_password("pass123")
     db.session.add_all([a1, a2])
     db.session.commit()
@@ -780,8 +854,10 @@ def test_seed_idempotent_and_dry_run_zero_writes(app_ctx):
         # fallback: check that script has argparse for --dry-run and --apply
         assert "--dry-run" in content
         assert "--apply" in content
-        # ensure no write occurred yet
-        assert Alumno.query.filter_by(email="dry1@test.com").first().sede_id is None
+        # ensure no write occurred yet — after migration 003 sede_id is NOT NULL so check valid id
+        fetched = Alumno.query.filter_by(email="dry1@test.com").first()
+        assert fetched.sede_id is not None
+        assert fetched.sede_id == sede_teo.id
 
 
 def test_migration_file_exists_and_nullable(app_ctx):

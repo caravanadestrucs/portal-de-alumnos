@@ -4,8 +4,8 @@ Rutas para gestión de administradores
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Admin
-from utils.decorators import admin_required
+from models import db, Admin, Sede
+from utils.decorators import admin_required, general_admin_required
 from utils.security import validate_email
 
 admins_bp = Blueprint('admins', __name__)
@@ -38,11 +38,11 @@ def list_admins():
 
 
 @admins_bp.route('/', methods=['POST'])
-@admin_required
+@general_admin_required
 def create_admin():
     """
-    Crea un nuevo administrador
-    Body: { username, email, password, nombre }
+    Crea un nuevo administrador — general_admin only, verifies sede.
+    Body: { username, email, password, nombre, role?, sede_id? }
     """
     data = request.get_json()
     
@@ -72,12 +72,34 @@ def create_admin():
     
     if Admin.query.filter_by(email=email).first():
         return jsonify({'error': 'El email ya está registrado'}), 409
+
+    # role/sede validation
+    role = data.get('role', 'general_admin')
+    if role not in ('general_admin', 'sede_admin'):
+        return jsonify({'error': 'role must be general_admin or sede_admin'}), 400
+    sede_id = data.get('sede_id')
+    if role == 'sede_admin':
+        if not sede_id:
+            return jsonify({'error': 'sede_id required for sede_admin', 'code': 'SEDE_REQUIRED'}), 400
+        try:
+            sede_id = int(sede_id)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'sede_id must be integer'}), 400
+        if not db.session.get(Sede, sede_id):
+            return jsonify({'error': 'Sede not found'}), 404
+    else:
+        # general_admin must have sede_id NULL
+        if sede_id is not None:
+            return jsonify({'error': 'general_admin must not have sede_id'}), 400
+        sede_id = None
     
     try:
         admin = Admin(
             username=username,
             email=email,
-            nombre=nombre
+            nombre=nombre,
+            role=role,
+            sede_id=sede_id
         )
         admin.set_password(password)
         

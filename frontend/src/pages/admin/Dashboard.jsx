@@ -8,6 +8,7 @@ import { getAlumnos } from '../../api/alumnos';
 import { getCarreras } from '../../api/carreras';
 import { getMaterias } from '../../api/materias';
 import { getAlumnosConPagosPendientes } from '../../api/pagos';
+import { getSedes } from '../../api/sedes';
 import { CardSkeleton } from '../../components/ui/Skeleton';
 import {
   Users,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, isGeneralAdmin, isSedeAdmin, sede } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [stats, setStats] = useState({
@@ -30,19 +31,23 @@ export default function AdminDashboard() {
     pagosPendientes: 0,
     alumnosConDeuda: 0,
     totalAdeudo: 0,
+    sedes: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [scopedSede, setScopedSede] = useState(null);
 
   const loadStats = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [alumnosResponse, carreras, materias, pagosData] = await Promise.all([
-        getAlumnos({ per_page: 1 }).catch(() => ({ total: 0 })),
+      const sedeFilter = scopedSede || undefined;
+      const [alumnosResponse, carreras, materias, pagosData, sedesData] = await Promise.all([
+        getAlumnos({ per_page: 1, sede_id: sedeFilter }).catch(() => ({ total: 0 })),
         getCarreras().catch(() => []),
         getMaterias().catch(() => []),
         getAlumnosConPagosPendientes().catch(() => ({ alumnos: [], total_adeudo: 0 })),
+        getSedes().catch(() => ({ sedes: [], total: 0 })),
       ]);
 
       setStats({
@@ -52,6 +57,7 @@ export default function AdminDashboard() {
         pagosPendientes: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
         alumnosConDeuda: Array.isArray(pagosData.alumnos) ? pagosData.alumnos.length : 0,
         totalAdeudo: pagosData.total_adeudo || 0,
+        sedes: Array.isArray(sedesData.sedes) ? sedesData.sedes.length : 0,
       });
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error loading stats:', err);
@@ -64,6 +70,17 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadStats();
+  }, [scopedSede]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const v = e.detail;
+      setScopedSede(v === 'all' ? null : v);
+    };
+    window.addEventListener('sede-change', handler);
+    const stored = localStorage.getItem('activeSede');
+    if (stored && stored !== 'all') setScopedSede(stored);
+    return () => window.removeEventListener('sede-change', handler);
   }, []);
 
   const statCards = [
@@ -124,6 +141,20 @@ export default function AdminDashboard() {
           <p className="text-gray-500 mt-1">
             Panel de administración - Universidad Felipe Villanueva
           </p>
+          <div className="mt-2 flex items-center gap-2">
+            {isGeneralAdmin && (
+              <>
+                <span className="px-2 py-1 text-xs bg-accent-100 text-accent-700 rounded-full">General — Todas las sedes</span>
+                <span className="text-xs text-gray-500">{stats.sedes} sedes • scoped counts por sede</span>
+              </>
+            )}
+            {isSedeAdmin && sede && (
+              <span className="px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded-full">{sede.codigo} — {sede.nombre}</span>
+            )}
+            {isSedeAdmin && !sede && (
+              <span className="px-2 py-1 text-xs bg-primary-100 text-primary-700 rounded-full">Sede {user?.sede_id}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Clock size={16} />

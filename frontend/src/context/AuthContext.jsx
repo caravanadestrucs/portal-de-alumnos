@@ -3,9 +3,63 @@ import * as authApi from '../api/auth';
 
 const AuthContext = createContext(null);
 
-function normalizeUser(raw) {
+export function normalizeUser(raw) {
   if (!raw) return null;
-  return { ...raw, rol: raw.rol || raw.type, type: raw.type || raw.rol };
+  const rol = raw.rol || raw.type || raw.user_type || null;
+  const type = raw.type || raw.user_type || raw.rol || null;
+  const user_type = raw.user_type || raw.type || raw.rol || null;
+  // role is admin subtype, keep undefined if not present (legacy admin)
+  const role = raw.role;
+  let sede_id_raw;
+  if (raw.sede_id !== undefined) sede_id_raw = raw.sede_id;
+  else if (raw.sedeId !== undefined) sede_id_raw = raw.sedeId;
+  else if (raw.sede?.id !== undefined) sede_id_raw = raw.sede.id;
+  else sede_id_raw = null;
+  const normalizedSedeId = sede_id_raw === undefined ? null : sede_id_raw;
+  const sede = raw.sede ?? null;
+  const base = {
+    ...raw,
+    rol,
+    type,
+    user_type,
+    sede_id: normalizedSedeId,
+    sedeId: normalizedSedeId,
+    sede,
+  };
+  if (role !== undefined) {
+    base.role = role;
+  } else {
+    // ensure role is undefined not null for legacy
+    if ('role' in base) delete base.role;
+  }
+  // preserve sede_id_alias for compat
+  base.sede_id_alias = normalizedSedeId;
+  return base;
+}
+
+export function getSedeId(user) {
+  if (!user) return null;
+  let v;
+  if (user.sede_id !== undefined) v = user.sede_id;
+  else if (user.sedeId !== undefined) v = user.sedeId;
+  else if (user.sede?.id !== undefined) v = user.sede.id;
+  else v = null;
+  return v === undefined ? null : v;
+}
+
+export function getRole(user) {
+  if (!user) return null;
+  return user.role ?? null;
+}
+
+export function isGeneralAdmin(user) {
+  if (!user) return false;
+  return user.role === 'general_admin';
+}
+
+export function isSedeAdmin(user) {
+  if (!user) return false;
+  return user.role === 'sede_admin';
 }
 
 export function AuthProvider({ children }) {
@@ -70,6 +124,11 @@ export function AuthProvider({ children }) {
     isAdmin: user?.rol === 'admin',
     isAlumno: user?.rol === 'alumno',
     isProfesor: user?.rol === 'profesor',
+    isGeneralAdmin: isGeneralAdmin(user),
+    isSedeAdmin: isSedeAdmin(user),
+    sedeId: getSedeId(user),
+    sede: user?.sede ?? null,
+    role: getRole(user),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

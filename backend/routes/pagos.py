@@ -11,11 +11,18 @@ from utils.decorators import admin_required
 pagos_bp = Blueprint('pagos', __name__)
 
 
+def _pago_alumno_forbidden(alumno):
+    claims = get_jwt()
+    if (claims.get('user_type') or claims.get('type')) == 'admin' and claims.get('role') == 'sede_admin':
+        return alumno.sede_id != claims.get('sede_id')
+    return False
+
+
 @pagos_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 def get_alumno_pagos(alumno_id):
     """
-    Obtiene todas las notas de remisión de un alumno
+    Obtiene todas las notas de remisión de un alumno — scoped
     """
     # Verificar permisos
     claims = get_jwt()
@@ -23,6 +30,8 @@ def get_alumno_pagos(alumno_id):
         return jsonify({'error': 'No tienes permiso para ver estos pagos'}), 403
     
     alumno = Alumno.query.get_or_404(alumno_id)
+    if _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Filtros
     pagada = request.args.get('pagada')
@@ -75,6 +84,8 @@ def create_nota():
     alumno = db.session.get(Alumno, data['alumno_id'])
     if not alumno:
         return jsonify({'error': 'El alumno no existe'}), 404
+    if _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Obtener el admin actual del JWT
     claims = get_jwt()
@@ -116,9 +127,12 @@ def create_nota():
 @admin_required
 def update_nota(id):
     """
-    Actualiza una nota de remisión (admin)
+    Actualiza una nota de remisión (admin) — scoped
     """
     nota = NotaRemision.query.get_or_404(id)
+    alumno = db.session.get(Alumno, nota.alumno_id)
+    if alumno and _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data:
@@ -158,13 +172,17 @@ def update_nota(id):
 @jwt_required()
 def get_nota(id):
     """
-    Obtiene una nota por ID
+    Obtiene una nota por ID — scoped
     """
     nota = NotaRemision.query.get_or_404(id)
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != nota.alumno_id:
         return jsonify({'error': 'No tienes permiso para ver esta nota'}), 403
+    if (claims.get('user_type') or claims.get('type')) == 'admin' and claims.get('role') == 'sede_admin':
+        alumno = db.session.get(Alumno, nota.alumno_id)
+        if alumno and alumno.sede_id != claims.get('sede_id'):
+            return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     return jsonify({'nota': nota.to_dict()}), 200
 
@@ -173,9 +191,12 @@ def get_nota(id):
 @admin_required
 def delete_nota(id):
     """
-    Elimina una nota de remisión (admin)
+    Elimina una nota de remisión (admin) — scoped
     """
     nota = NotaRemision.query.get_or_404(id)
+    alumno = db.session.get(Alumno, nota.alumno_id)
+    if alumno and _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     try:
         db.session.delete(nota)
@@ -192,9 +213,12 @@ def delete_nota(id):
 @admin_required
 def toggle_pagado(id):
     """
-    Cambia el estado de pagado/no pagado de una nota (admin)
+    Cambia el estado de pagado/no pagado de una nota (admin) — scoped
     """
     nota = NotaRemision.query.get_or_404(id)
+    alumno = db.session.get(Alumno, nota.alumno_id)
+    if alumno and _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json() or {}
     
     try:
@@ -223,10 +247,13 @@ def toggle_pagado(id):
 @admin_required
 def marcar_pagado(id):
     """
-    Marca una nota como pagada con fecha específica (admin)
+    Marca una nota como pagada con fecha específica (admin) — scoped
     Body: { "fecha_pago": "2026-04-23" }
     """
     nota = NotaRemision.query.get_or_404(id)
+    alumno = db.session.get(Alumno, nota.alumno_id)
+    if alumno and _pago_alumno_forbidden(alumno):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data or not data.get('fecha_pago'):
@@ -296,15 +323,22 @@ def get_all_notas():
     pagada = request.args.get('pagada')
     search = request.args.get('search', '')
     
-    query = NotaRemision.query
+    query = NotaRemision.query.join(Alumno, NotaRemision.alumno_id == Alumno.id)
+    # sede scoping
+    claims = get_jwt()
+    if claims.get('role') == 'sede_admin':
+        query = query.filter(Alumno.sede_id == claims.get('sede_id'))
+    else:
+        qs_sede = request.args.get('sede_id', type=int)
+        if qs_sede is not None:
+            query = query.filter(Alumno.sede_id == qs_sede)
     
     if pagada is not None:
         query = query.filter(NotaRemision.pagada == (pagada.lower() == 'true'))
     
     if search:
         search_term = f'%{search}%'
-        from models import Alumno
-        query = query.join(Alumno).filter(
+        query = query.filter(
             db.or_(
                 Alumno.nombre.ilike(search_term),
                 Alumno.apellido_paterno.ilike(search_term),

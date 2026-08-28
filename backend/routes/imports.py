@@ -13,7 +13,7 @@ from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt
 
-from models import db, Alumno, Carrera, Materia, Calificacion, NotaRemision
+from models import db, Alumno, Carrera, Materia, Calificacion, NotaRemision, Sede
 from utils.decorators import admin_required
 
 imports_bp = Blueprint('imports', __name__)
@@ -156,6 +156,9 @@ HEADER_ALIASES = {
     'activa': [
         'activa', 'activo', 'active', 'activa_', 'estado',
         'habilitada', 'habilitado', 'enabled',
+    ],
+    'sede': [
+        'sede', 'sede_codigo', 'campus', 'sede_id', 'codigo_sede',
     ],
 }
 
@@ -333,6 +336,19 @@ def _resolve_materia(value):
         return materia
     materia = Materia.query.filter(Materia.nombre.ilike(value)).first()
     return materia
+
+
+def _resolve_sede(value):
+    """Resolve Sede by codigo (case-insensitive) or nombre."""
+    if not value:
+        return None
+    v = value.strip().upper()
+    sede = Sede.query.filter(db.func.upper(Sede.codigo) == v).first()
+    if sede:
+        return sede
+    # fallback by nombre
+    sede = Sede.query.filter(db.func.lower(Sede.nombre) == value.strip().lower()).first()
+    return sede
 
 
 def _resolve_alumno(numero_control):
@@ -550,6 +566,47 @@ def _parse_alumnos(headers, rows):
         if not password:
             final_password = f"alumno{numero_control}"
 
+        # Sede validation (alumnos import requires sede)
+        sede_val = _get_value(row_values, field_map, 'sede') if 'sede' in field_map else ''
+        if not sede_val:
+            errors.append({
+                'row': row_num, 'field': 'sede',
+                'value': sede_val, 'message': 'La sede es requerida (use TEO o HUA)'
+            })
+            result_rows.append({
+                'numero_control': numero_control,
+                'nombre': nombre,
+                'apellido_paterno': apellido_paterno,
+                'apellido_materno': apellido_materno,
+                'email': email,
+                'password': final_password,
+                'carrera': carrera_val,
+                'carrera_id': carrera.id,
+                'sede': sede_val,
+                'valid': False,
+            })
+            continue
+        sede = _resolve_sede(sede_val)
+        if not sede:
+            errors.append({
+                'row': row_num, 'field': 'sede',
+                'value': sede_val,
+                'message': f'La sede "{sede_val}" no existe. Use TEO o HUA'
+            })
+            result_rows.append({
+                'numero_control': numero_control,
+                'nombre': nombre,
+                'apellido_paterno': apellido_paterno,
+                'apellido_materno': apellido_materno,
+                'email': email,
+                'password': final_password,
+                'carrera': carrera_val,
+                'carrera_id': carrera.id,
+                'sede': sede_val,
+                'valid': False,
+            })
+            continue
+
         # Fila válida
         row_data = {
             'numero_control': numero_control,
@@ -559,6 +616,8 @@ def _parse_alumnos(headers, rows):
             'email': email.lower().strip(),
             'password': final_password,
             'carrera_id': carrera.id,
+            'sede_id': sede.id,
+            'sede_codigo': sede.codigo,
             'valid': True,
         }
         result_rows.append(row_data)
@@ -1205,6 +1264,14 @@ def preview_import():
     for h in headers:
         if h and h not in _ALIAS_TO_FIELD:
             warnings.append(f"Columna '{h}' no será importada (no reconocida)")
+    # sede warnings for alumnos
+    if tipo == 'alumnos' and 'sede' not in field_map:
+        warnings.append("sede column missing — provide sede, sede_codigo or campus (TEO/HUA required)")
+    # also warn per-row invalid sede
+    for rp in rows_preview:
+        for err in rp.get('errors', []):
+            if err.get('field') == 'sede':
+                warnings.append(f"Row {rp['row']} sede: {err.get('message')}")
 
     return jsonify({
         'columns': column_defs[tipo],
@@ -1294,15 +1361,33 @@ def execute_import():
 
     # Si hay errores (estructurales o por fila), retornar sin escribir
     if parser_result['errors']:
-        # Separar estructurales (row=0) para el conteo
-        row_errors = [e for e in parser_result['errors'] if e.get('row', 0) > 0]
+        # determine status code: alumno sede errors -> 400, else 200 with error list
+        has_sede_error = any(e.get('field') == 'sede' for e in parser_result['errors'])
+        status_code = 400 if has_sede_error else 200
+        # sede_admin cross check not yet — that comes after
         return jsonify({
             'status': 'error',
             'imported': 0,
             'errors': parser_result['errors'],
             'total_rows': len(all_rows),
             'error_count': len(parser_result['errors']),
-        }), 200
+        }), status_code
+
+    # Sede scoping for sede_admin — alumnos import only
+    if tipo == 'alumnos':
+        claims = get_jwt()
+        if claims.get('role') == 'sede_admin':
+            token_sede = claims.get('sede_id')
+            for row in parser_result['rows']:
+                rsede = row.get('sede_id')
+                if rsede != token_sede:
+                    return jsonify({
+                        'status': 'error',
+                        'imported': 0,
+                        'errors': [{'row': 0, 'field': 'sede', 'value': row.get('sede_codigo'), 'message': 'Cross-sede import forbidden for sede_admin', 'code': 'CROSS_SEDE'}],
+                        'total_rows': len(all_rows),
+                        'error_count': 1,
+                    }), 403
 
     # Obtener admin_id del JWT
     claims = get_jwt()
@@ -1346,6 +1431,7 @@ def _execute_transaction(tipo, rows, admin_id):
                     apellido_materno=row_data.get('apellido_materno') or None,
                     email=row_data['email'],
                     carrera_id=row_data['carrera_id'],
+                    sede_id=row_data.get('sede_id'),
                     activo=True,
                     fecha_registro=date.today(),
                 )

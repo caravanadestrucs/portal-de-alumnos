@@ -10,8 +10,9 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
 
-from models import db, Alumno, Carrera, Materia, Calificacion
-from utils.decorators import admin_required, get_admin_or_403
+from models import db, Alumno, Carrera, Materia, Calificacion, Sede
+from utils.decorators import admin_required, get_admin_or_403, general_admin_required
+from utils.scope import scope_by_sede
 from extensions import limiter
 from utils.mail import send_credentials_email
 
@@ -31,6 +32,7 @@ def list_alumnos():
         - activo: true/false
         - page: número de página
         - per_page: items por página
+        - sede_id: filter by sede (general_admin only)
     """
     # Obtener parámetros de query
     search = request.args.get('search', '').strip()
@@ -42,8 +44,8 @@ def list_alumnos():
     except ValueError:
         per_page = 20
     
-    # Query base
-    query = Alumno.query
+    # Query base with sede scoping
+    query = scope_by_sede(Alumno.query, Alumno.sede_id)
     
     # Aplicar filtros
     if search:
@@ -112,7 +114,24 @@ def create_alumno():
     carrera = db.session.get(Carrera, data['carrera_id'])
     if not carrera:
         return jsonify({'error': 'La carrera especificada no existe'}), 404
-    
+
+    # Sede validation: required and scoped
+    sede_id = data.get('sede_id')
+    claims = get_jwt()
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    if not sede_id:
+        return jsonify({'error': 'sede_id is required', 'code': 'SEDE_REQUIRED'}), 400
+    try:
+        sede_id = int(sede_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'sede_id must be integer'}), 400
+    sede = db.session.get(Sede, sede_id)
+    if not sede:
+        return jsonify({'error': 'Sede not found'}), 404
+    if role == 'sede_admin' and token_sede != sede_id:
+        return jsonify({'error': 'Cross-sede creation forbidden', 'code': 'CROSS_SEDE'}), 403
+
     try:
         alumno = Alumno(
             numero_control=data['numero_control'],
@@ -121,6 +140,7 @@ def create_alumno():
             apellido_materno=data.get('apellido_materno', '').strip() or None,
             email=data['email'].lower().strip(),
             carrera_id=data['carrera_id'],
+            sede_id=sede_id,
             activo=data.get('activo', True),
             fecha_registro=datetime.utcnow().date()
         )
@@ -167,10 +187,17 @@ def create_alumno():
 @jwt_required()
 def get_alumno(id):
     """
-    Obtiene un alumno por ID (admin o el propio alumno)
+    Obtiene un alumno por ID (admin o el propio alumno) — scoped by sede for admins.
     """
     claims = get_jwt()
     alumno = Alumno.query.get_or_404(id)
+
+    # Admin sede scoping: sede_admin can only view own sede
+    if (claims.get('user_type') or claims.get('type')) == 'admin':
+        role = claims.get('role')
+        token_sede = claims.get('sede_id')
+        if role == 'sede_admin' and alumno.sede_id != token_sede:
+            return jsonify({'error': 'Cross-sede access forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Verificar permisos: solo el admin o el propio alumno pueden ver
     if claims.get('type') == 'alumno' and claims['id'] != id:
@@ -183,11 +210,17 @@ def get_alumno(id):
 @admin_required
 def update_alumno(id):
     """
-    Actualiza un alumno (admin)
+    Actualiza un alumno (admin) — scoped by sede.
     Si se cambia la carrera, se eliminan las calificaciones anteriores
     (porque pertenecían a la carrera anterior).
     """
     alumno = Alumno.query.get_or_404(id)
+    # sede scoping check
+    claims = get_jwt()
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    if role == 'sede_admin' and alumno.sede_id != token_sede:
+        return jsonify({'error': 'Cross-sede update forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data:
@@ -261,9 +294,14 @@ def update_alumno(id):
 @admin_required
 def delete_alumno(id):
     """
-    Elimina un alumno (admin)
+    Elimina un alumno (admin) — scoped by sede.
     """
     alumno = Alumno.query.get_or_404(id)
+    claims = get_jwt()
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    if role == 'sede_admin' and alumno.sede_id != token_sede:
+        return jsonify({'error': 'Cross-sede delete forbidden', 'code': 'CROSS_SEDE'}), 403
     
     try:
         # Eliminar registros relacionados (redundante con cascade, pero seguro)
@@ -312,6 +350,15 @@ def mis_datos():
     }), 200
 
 
+def _check_alumno_sede_access(alumno, claims):
+    """Return 403 response if sede_admin tries cross-sede, else None."""
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    if role == 'sede_admin' and alumno.sede_id != token_sede:
+        return jsonify({'error': 'Cross-sede access forbidden', 'code': 'CROSS_SEDE'}), 403
+    return None
+
+
 def _generate_temp_password() -> str:
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(8))
@@ -356,6 +403,11 @@ def send_credentials():
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
     login_url = f"{frontend_url}/login"
 
+    # Sede scoping for bulk: sede_admin can only target own sede
+    claims_scope = get_jwt()
+    role_scope = claims_scope.get('role')
+    token_sede_scope = claims_scope.get('sede_id')
+
     results = []
     enviados = 0
     fallidos = 0
@@ -364,6 +416,11 @@ def send_credentials():
         alumno = db.session.get(Alumno, alumno_id)
         if not alumno:
             results.append({"id": alumno_id, "status": "failed", "error": "Alumno not found", "email": None})
+            fallidos += 1
+            continue
+        # per-id sede check for sede_admin
+        if role_scope == 'sede_admin' and alumno.sede_id != token_sede_scope:
+            results.append({"id": alumno_id, "email": alumno.email, "status": "failed", "error": "Cross-sede forbidden", "code": "CROSS_SEDE"})
             fallidos += 1
             continue
 
@@ -415,6 +472,31 @@ def send_credentials():
     if fallidos > 0 and enviados > 0:
         return jsonify(body), 207
     return jsonify(body), 200
+
+
+@alumnos_bp.route('/<int:id>/sede', methods=['PATCH'])
+@general_admin_required
+def transfer_sede(id):
+    """Transfer alumno to another sede — general_admin only."""
+    alumno = Alumno.query.get_or_404(id)
+    data = request.get_json(silent=True) or {}
+    new_sede_id = data.get('sede_id')
+    if not new_sede_id:
+        return jsonify({'error': 'sede_id required', 'code': 'SEDE_REQUIRED'}), 400
+    try:
+        new_sede_id = int(new_sede_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'sede_id must be integer'}), 400
+    sede = db.session.get(Sede, new_sede_id)
+    if not sede:
+        return jsonify({'error': 'Sede not found'}), 404
+    alumno.sede_id = new_sede_id
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'message': 'Sede transferred', 'alumno': alumno.to_dict()}), 200
 
 
 @alumnos_bp.route('/stats', methods=['GET'])

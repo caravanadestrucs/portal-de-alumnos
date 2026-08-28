@@ -2,10 +2,11 @@
 Rutas para gestión de Profesores
 """
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Profesor
+from models import db, Profesor, Sede
 from utils.decorators import admin_required
+from utils.scope import scope_by_sede
 
 profesores_bp = Blueprint('profesores', __name__)
 
@@ -27,7 +28,7 @@ def get_profesores():
     except ValueError:
         per_page = 20
     
-    query = Profesor.query
+    query = scope_by_sede(Profesor.query, Profesor.sede_id)
     
     if activo is not None:
         query = query.filter_by(activo=activo.lower() == 'true')
@@ -45,13 +46,20 @@ def get_profesores():
     }), 200
 
 
+def _prof_sede_forbidden(prof):
+    c = get_jwt()
+    return c.get('role') == 'sede_admin' and prof.sede_id != c.get('sede_id')
+
+
 @profesores_bp.route('/<int:profesor_id>', methods=['GET'])
 @jwt_required()
 def get_profesor(profesor_id):
     """
-    Obtiene un profesor por ID
+    Obtiene un profesor por ID — scoped
     """
     profesor = Profesor.query.get_or_404(profesor_id)
+    if _prof_sede_forbidden(profesor):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     return jsonify({'profesor': profesor.to_dict()}), 200
 
 
@@ -80,6 +88,22 @@ def create_profesor():
     # Verificar si ya existe el email
     if Profesor.query.filter_by(email=data['email'].lower()).first():
         return jsonify({'error': 'El email ya está registrado'}), 409
+
+    # sede validation
+    claims = get_jwt()
+    role = claims.get('role')
+    token_sede = claims.get('sede_id')
+    sede_id = data.get('sede_id')
+    if not sede_id:
+        return jsonify({'error': 'sede_id is required', 'code': 'SEDE_REQUIRED'}), 400
+    try:
+        sede_id = int(sede_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'sede_id must be integer'}), 400
+    if role == 'sede_admin' and token_sede != sede_id:
+        return jsonify({'error': 'Cross-sede creation forbidden', 'code': 'CROSS_SEDE'}), 403
+    if not db.session.get(Sede, sede_id):
+        return jsonify({'error': 'Sede not found'}), 404
     
     profesor = Profesor(
         numero_empleado=data['numero_empleado'],
@@ -88,6 +112,7 @@ def create_profesor():
         apellido_materno=data.get('apellido_materno'),
         titulo=data.get('titulo'),
         email=data['email'].lower(),
+        sede_id=sede_id,
         activo=data.get('activo', True)
     )
     profesor.set_password(data['password'])
@@ -110,10 +135,12 @@ def create_profesor():
 @admin_required
 def update_profesor(profesor_id):
     """
-    Actualiza un profesor
+    Actualiza un profesor — scoped
     Body: { numero_empleado, nombre, apellido_paterno, apellido_materno, titulo, email, password, activo }
     """
     profesor = Profesor.query.get_or_404(profesor_id)
+    if _prof_sede_forbidden(profesor):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     data = request.get_json()
     
     if not data:
@@ -160,9 +187,11 @@ def update_profesor(profesor_id):
 @admin_required
 def delete_profesor(profesor_id):
     """
-    Elimina o desactiva un profesor
+    Elimina o desactiva un profesor — scoped
     """
     profesor = Profesor.query.get_or_404(profesor_id)
+    if _prof_sede_forbidden(profesor):
+        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
     
     # Verificar si tiene asignaciones activas
     if profesor.asignaciones.filter_by(activo=True).count() > 0:
