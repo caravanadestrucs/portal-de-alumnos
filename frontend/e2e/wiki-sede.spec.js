@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function mockSedes(page) {
-  await page.route('**/api/sedes*', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/sedes'), async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -27,7 +27,7 @@ async function mockSedes(page) {
 }
 
 async function mockWiki(page, { isCross403 = false } = {}) {
-  await page.route('**/api/wiki/pages*', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/wiki/pages'), async (route) => {
     const method = route.request().method();
     const url = route.request().url();
     if (method === 'GET') {
@@ -87,7 +87,7 @@ async function mockWiki(page, { isCross403 = false } = {}) {
     }
   });
 
-  await page.route('**/api/wiki/pages/*/history', async (route) => {
+  await page.route((url) => new URL(url).pathname.match(/\/api\/wiki\/pages\/\d+\/history/), async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -95,7 +95,7 @@ async function mockWiki(page, { isCross403 = false } = {}) {
     });
   });
 
-  await page.route('**/api/wiki/pages/*/attachments', async (route) => {
+  await page.route((url) => new URL(url).pathname.match(/\/api\/wiki\/pages\/\d+\/attachments/), async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -110,7 +110,7 @@ async function mockWiki(page, { isCross403 = false } = {}) {
       });
     }
   });
-  await page.route('**/api/wiki/attachments/**', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/wiki/attachments'), async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -120,7 +120,7 @@ async function mockWiki(page, { isCross403 = false } = {}) {
 }
 
 async function mockAlumnos(page) {
-  await page.route('**/api/alumnos*', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/alumnos'), async (route) => {
     const url = new URL(route.request().url());
     const sede = url.searchParams.get('sede_id');
     let alumnos = [
@@ -135,16 +135,22 @@ async function mockAlumnos(page) {
       body: JSON.stringify({ alumnos, total: alumnos.length, pages: 1, page: 1 }),
     });
   });
-  await page.route('**/api/carreras*', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/carreras'), async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ carreras: [{ id: 1, nombre: 'ISC' }] }) });
   });
-  await page.route('**/api/materias*', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/materias'), async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ materias: [{ id: 1, nombre: 'Mat' }] }) });
   });
-  await page.route('**/api/pagos/alumnos-con-pagos-pendientes', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ alumnos: [], total_adeudo: 0 }) });
+  await page.route((url) => new URL(url).pathname.startsWith('/api/pagos'), async (route) => {
+    // Handle both /pagos/alumnos-pendientes and /pagos/alumnos-con-pagos-pendientes and /pagos/alumnos/:id
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname.includes('alumnos-pendientes') || pathname.includes('alumnos-con-pagos')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ alumnos: [], total_adeudo: 0 }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
-  await page.route('**/api/admins/**', async (route) => {
+  await page.route((url) => new URL(url).pathname.startsWith('/api/admins'), async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ admins: [{ id: 1, username: 'admin', nombre: 'Admin', email: 'a@fv.edu', role: 'general_admin', sede_id: null }] }) });
     } else {
@@ -167,48 +173,44 @@ async function loginAs(page, { role = 'general_admin', sede_id = null }) {
     sedeId: sede_id,
     user_type: 'admin',
   };
-  // Register auth/me mock BEFORE navigation to avoid race where AuthContext
-  // would call GET /api/auth/me before mock is ready and trigger 401 redirect.
-  await page.route('**/api/auth/me', async (route) => {
+  // Register auth/me mock BEFORE navigation to avoid race.
+  await page.route((url) => new URL(url).pathname === '/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ type: 'admin', user }),
     });
   });
-  // Fallback for any unmocked /api/** to prevent 401 interceptor redirect (window.location -> /login)
-  // Specific mocks (sedes, wiki, alumnos, etc.) are registered earlier in beforeEach/test and take precedence
-  // because they are matched first; this fallback only handles unknown endpoints.
-  await page.route('**/api/**', async (route) => {
-    // If this route is reached, it means no earlier specific mock handled it — return 200 to avoid 401
-    // Do not interfere with already-handled routes (they won't reach here)
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({}),
-    });
-  });
   await page.addInitScript(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
   }, { token: 'fake-jwt-token', user });
-  await page.goto('/admin', { waitUntil: 'domcontentloaded' });
-  // Double-ensure via evaluate + reload (handles cases where addInitScript timing missed or storageState isolated)
+  // Navigate to a same-origin page first to ensure localStorage is set for http://localhost:3000
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.evaluate(({ token, user }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
   }, { token: 'fake-jwt-token', user });
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(500);
-  // Wait for admin layout to be visible (not redirected to /login)
-  await page.waitForURL('**/admin**', { timeout: 5000 }).catch(() => {});
+  await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  // Ensure we are on /admin (not redirected to /login)
+  const url = page.url();
+  if (!url.includes('/admin')) {
+    // Fallback: set again and reload
+    await page.evaluate(({ token, user }) => {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    }, { token: 'fake-jwt-token', user });
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(800);
+  }
 }
 
 test.describe('Wiki Sede Multitenancy E2E', () => {
   test.beforeEach(async ({ page }) => {
     await mockSedes(page);
     await mockAlumnos(page);
-    await page.route('**/api/auth/login', async (route) => {
+    await page.route((url) => new URL(url).pathname === '/api/auth/login', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -225,8 +227,9 @@ test.describe('Wiki Sede Multitenancy E2E', () => {
     await expect(page.getByLabel(/sede switcher/i)).toBeVisible();
     await page.goto('/admin/sedes');
     await expect(page.getByRole('heading', { name: /Sedes/i })).toBeVisible();
-    await expect(page.getByText('TEO').first()).toBeVisible();
-    await expect(page.getByText('HUA').first()).toBeVisible();
+    // Use cell role to avoid matching hidden <option> elements
+    await expect(page.getByRole('cell', { name: 'TEO', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'HUA', exact: true })).toBeVisible();
   });
 
   test('sede_admin TEO ve badge TEO y wiki filtrado', async ({ page }) => {
@@ -265,7 +268,8 @@ test.describe('Wiki Sede Multitenancy E2E', () => {
     await expect(sedeFilter).toBeVisible();
     await sedeFilter.selectOption('1');
     await page.waitForTimeout(800);
-    await expect(page.getByText('TEO').first()).toBeVisible();
+    // Use cell to avoid hidden option
+    await expect(page.getByRole('cell', { name: 'TEO', exact: true }).first()).toBeVisible();
   });
 
   test('wiki read global visible both sedes, private isolated', async ({ page }) => {
@@ -273,7 +277,7 @@ test.describe('Wiki Sede Multitenancy E2E', () => {
     await loginAs(page, { role: 'sede_admin', sede_id: 1 });
     await page.goto('/wiki/guia');
     await expect(page.getByRole('heading', { name: /Guia/i })).toBeVisible();
-    await expect(page.getByText(/Hola TEO/)).toBeVisible();
+    await expect(page.getByText(/Hola TEO/).first()).toBeVisible();
     await page.goto('/wiki/reg');
     // global page - heading may be Reglamento
     await expect(page.getByText(/Reglamento|global/i).first()).toBeVisible();
