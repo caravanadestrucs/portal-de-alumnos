@@ -79,7 +79,7 @@ def login():
     # Buscar en admins
     admin = Admin.query.filter_by(email=email).first()
     if admin and admin.check_password(password):
-        tokens = generate_tokens(admin.id, 'admin')
+        tokens = generate_tokens(admin.id, 'admin', role=getattr(admin, 'role', 'general_admin'), sede_id=getattr(admin, 'sede_id', None))
         return jsonify({
             'message': 'Login exitoso',
             'user': {
@@ -87,7 +87,10 @@ def login():
                 'id': admin.id,
                 'username': admin.username,
                 'nombre': admin.nombre,
-                'email': admin.email
+                'email': admin.email,
+                'role': getattr(admin, 'role', None),
+                'sede_id': getattr(admin, 'sede_id', None),
+                'sede': admin.sede.to_dict() if getattr(admin, 'sede', None) else None,
             },
             **tokens
         }), 200
@@ -352,7 +355,7 @@ def get_current_user():
     Obtiene la información del usuario actual
     """
     claims = get_jwt()
-    user_type = claims.get('type')
+    user_type = claims.get('user_type') or claims.get('type')
     user_id = claims.get('id')
     
     if user_type == 'admin':
@@ -383,7 +386,13 @@ def refresh_token():
     Refresca el token de acceso usando el refresh token
     """
     claims = get_jwt()
-    tokens = generate_tokens(claims['id'], claims['type'])
+    user_type = claims.get('user_type') or claims.get('type')
+    tokens = generate_tokens(
+        claims['id'],
+        user_type,
+        role=claims.get('role'),
+        sede_id=claims.get('sede_id')
+    )
     
     return jsonify({
         'message': 'Token refrescado',
@@ -413,7 +422,7 @@ def change_password():
     if len(new_password) < 6:
         return jsonify({'error': 'La nueva contraseña debe tener al menos 6 caracteres'}), 400
     
-    user_type = claims.get('type')
+    user_type = claims.get('user_type') or claims.get('type')
     user_id = claims.get('id')
     
     try:

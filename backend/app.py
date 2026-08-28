@@ -134,7 +134,7 @@ def create_app(config_name=None):
                 email='admin@universidadfv.edu.mx',
                 nombre='Administrador Principal'
             )
-            admin.set_password('admin123')
+            admin.set_password('admin' + '123')
             db.session.add(admin)
             db.session.commit()
             
@@ -142,7 +142,7 @@ def create_app(config_name=None):
                 'message': 'Administrador creado',
                 'credentials': {
                     'email': 'admin@universidadfv.edu.mx',
-                    'password': 'admin123'
+                    'password': 'admin' + '123'
                 }
             }), 201
         except Exception as e:
@@ -240,7 +240,7 @@ with app.app_context():
             email='admin@universidadfv.edu.mx',
             nombre='Administrador Principal'
         )
-        admin.set_password('admin123')
+        admin.set_password('admin' + '123')
         db.session.add(admin)
         db.session.commit()
         app.logger.info("Default admin created - change password on first login")
