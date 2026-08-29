@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/index';
 import { getCarreras } from '../../api/carreras';
+import { getSedes } from '../../api/sedes';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -11,6 +12,10 @@ import { getEmailError, getNumeroControlError } from '../../utils/validation';
 
 const FALLBACK_ALUMNO_TOKEN = 'ca2d949f-5cd2-4785-918e-205d6566f4e7';
 const FALLBACK_PROFESOR_TOKEN = 'ef4a3a25-0214-4581-97dc-5104bb06c748';
+const FALLBACK_SEDES = [
+  { id: 1, codigo: 'TEO', nombre: 'Teotitlán' },
+  { id: 2, codigo: 'HUA', nombre: 'Huautla' },
+];
 
 export default function Register({ role = 'alumno' }) {
   const { token: inviteToken } = useParams();
@@ -48,8 +53,10 @@ export default function Register({ role = 'alumno' }) {
     password: '',
     confirm_password: '',
     carrera_id: '',
+    sede_id: '',
   });
   const [carreras, setCarreras] = useState([]);
+  const [sedes, setSedes] = useState([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,6 +74,29 @@ export default function Register({ role = 'alumno' }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, [isProfesor, showNotFound]);
+
+  useEffect(() => {
+    if (!isProfesor || showNotFound) return;
+    let cancelled = false;
+    getSedes()
+      .then((data) => {
+        if (!cancelled) {
+          const list = data?.sedes || data || [];
+          setSedes(list.length > 0 ? list : FALLBACK_SEDES);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSedes(FALLBACK_SEDES);
+      });
+    // ensure fallback if still empty after short delay (anon 401 case)
+    const t = setTimeout(() => {
+      if (!cancelled) setSedes((prev) => (prev.length === 0 ? FALLBACK_SEDES : prev));
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
     };
   }, [isProfesor, showNotFound]);
 
@@ -92,6 +122,11 @@ export default function Register({ role = 'alumno' }) {
       return;
     }
 
+    if (isProfesor && !formData.sede_id) {
+      setError('Seleccioná una sede');
+      return;
+    }
+
     if (!isProfesor && !formData.carrera_id) {
       setError('Seleccioná una carrera');
       return;
@@ -108,6 +143,7 @@ export default function Register({ role = 'alumno' }) {
           apellido_materno: formData.apellido_materno,
           email: formData.email,
           password: formData.password,
+          sede_id: Number(formData.sede_id),
           invite_token: inviteToken,
         };
         await api.post('/auth/register/profesor', payload);
@@ -280,6 +316,24 @@ export default function Register({ role = 'alumno' }) {
                   ))}
                 </Select>
               </>
+            )}
+
+            {isProfesor && (
+              <Select
+                label="Sede"
+                name="sede_id"
+                id="register-sede"
+                required
+                value={formData.sede_id}
+                onChange={handleChange}
+              >
+                <option value="">Seleccioná una sede</option>
+                {(sedes.length > 0 ? sedes : FALLBACK_SEDES).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.codigo} — {s.nombre}
+                  </option>
+                ))}
+              </Select>
             )}
 
             <Input

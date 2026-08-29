@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { getGrupos, createGrupo, updateGrupo, deleteGrupo, getIntegrantes, addIntegrante, removeIntegrante } from '../../api/grupos';
 import { getCarreras } from '../../api/carreras';
 import { getAlumnos } from '../../api/alumnos';
+import { getSedes } from '../../api/sedes';
+import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -13,8 +15,11 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { Plus, Edit, Trash2, Users, UserPlus, UserMinus, Search } from 'lucide-react';
 
 export default function AdminGrupos() {
+  const { isGeneralAdmin, sedeId } = useAuth();
   const [grupos, setGrupos] = useState([]);
   const [carreras, setCarreras] = useState([]);
+  const [sedes, setSedes] = useState([]);
+  const [sedeFilter, setSedeFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showIntegrantesModal, setShowIntegrantesModal] = useState(false);
@@ -25,6 +30,7 @@ export default function AdminGrupos() {
     nombre: '',
     carrera_id: '',
     activo: true,
+    sede_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -43,15 +49,43 @@ export default function AdminGrupos() {
   const [integranteSaving, setIntegranteSaving] = useState(false);
 
   useEffect(() => {
-    loadGrupos();
     loadCarreras();
+    loadSedes();
+  }, []);
+
+  useEffect(() => {
+    loadGrupos();
+  }, [sedeFilter]);
+
+  const loadSedes = async () => {
+    try {
+      const data = await getSedes();
+      setSedes(data.sedes || []);
+    } catch (e) {
+      console.error('Error loading sedes:', e);
+    }
+  };
+
+  // listen to navbar sede switcher
+  useEffect(() => {
+    const handler = (e) => {
+      const v = e.detail;
+      if (v === 'all') setSedeFilter('');
+      else if (v === '1' || v === '2') setSedeFilter(v);
+    };
+    window.addEventListener('sede-change', handler);
+    const stored = localStorage.getItem('activeSede');
+    if (stored && stored !== 'all' && stored) setSedeFilter(stored);
+    return () => window.removeEventListener('sede-change', handler);
   }, []);
 
   // TODO Sprint 3: paginar getGrupos() con server pagination — hoy carga todo sin params y filtra en cliente
   const loadGrupos = async () => {
     setLoading(true);
     try {
-      const data = await getGrupos();
+      const params = {};
+      if (sedeFilter) params.sede_id = sedeFilter;
+      const data = await getGrupos(params);
       setGrupos(data || []);
     } catch (error) {
       console.error('Error loading grupos:', error);
@@ -85,6 +119,7 @@ export default function AdminGrupos() {
       nombre: '',
       carrera_id: carreras.length > 0 ? carreras[0].id : '',
       activo: true,
+      sede_id: isGeneralAdmin ? '' : (sedeId || ''),
     });
     setShowModal(true);
   };
@@ -96,6 +131,7 @@ export default function AdminGrupos() {
       nombre: grupo.nombre || '',
       carrera_id: grupo.carrera_id || '',
       activo: grupo.activo !== undefined ? grupo.activo : true,
+      sede_id: grupo.sede_id || grupo.sede?.id || sedeId || '',
     });
     setShowModal(true);
   };
@@ -134,10 +170,27 @@ export default function AdminGrupos() {
     setSaving(true);
 
     try {
-      if (modalMode === 'edit' && selectedGrupo) {
-        await updateGrupo(selectedGrupo.id, formData);
+      // auto-assign sede for sede_admin, validate for general_admin
+      let payload = { ...formData };
+      if (!isGeneralAdmin) {
+        payload.sede_id = sedeId;
       } else {
-        await createGrupo(formData);
+        if (!payload.sede_id) {
+          toast.error('Seleccioná una sede');
+          setSaving(false);
+          return;
+        }
+        payload.sede_id = parseInt(payload.sede_id, 10);
+      }
+      // ensure carrera_id is int
+      if (payload.carrera_id) payload.carrera_id = parseInt(payload.carrera_id, 10);
+
+      if (modalMode === 'edit' && selectedGrupo) {
+        // for edit, don't change sede_id via PUT (backend doesn't allow), but keep for validation
+        const { sede_id: _omit, ...updateData } = payload;
+        await updateGrupo(selectedGrupo.id, updateData);
+      } else {
+        await createGrupo(payload);
       }
       closeModal();
       loadGrupos();
@@ -223,8 +276,10 @@ export default function AdminGrupos() {
 
   // Filtrar grupos
   const filteredGrupos = grupos.filter(g => {
-    if (!searchTerm && !filtroCarrera) return true;
     if (filtroCarrera && g.carrera_id !== parseInt(filtroCarrera)) return false;
+    if (sedeFilter && isGeneralAdmin && g.sede_id !== undefined && g.sede_id !== null) {
+      if (String(g.sede_id) !== String(sedeFilter)) return false;
+    }
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       return g.nombre?.toLowerCase().includes(search);
@@ -250,7 +305,7 @@ export default function AdminGrupos() {
 
       {/* Filters */}
       <Card>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${isGeneralAdmin ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Buscar grupo
@@ -271,13 +326,23 @@ export default function AdminGrupos() {
               </option>
             ))}
           </Select>
+          {isGeneralAdmin && (
+            <Select label="Filtrar por sede" value={sedeFilter} onChange={(e) => setSedeFilter(e.target.value)}>
+              <option value="">Todas las sedes</option>
+              {sedes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.codigo} — {s.nombre}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
       </Card>
 
       {/* Table */}
       {loading ? (
         <Card>
-          <TableSkeleton rows={8} columns={5} />
+          <TableSkeleton rows={8} columns={isGeneralAdmin ? 6 : 5} />
         </Card>
       ) : filteredGrupos.length === 0 ? (
         <Card>
@@ -301,6 +366,11 @@ export default function AdminGrupos() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">
                     Carrera
                   </th>
+                  {isGeneralAdmin && (
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">
+                      Sede
+                    </th>
+                  )}
                   <th className="text-center py-3 px-4 font-semibold text-gray-700">
                     Integrantes
                   </th>
@@ -328,6 +398,19 @@ export default function AdminGrupos() {
                         {grupo.carrera?.nombre || '-'}
                       </span>
                     </td>
+                    {isGeneralAdmin && (
+                      <td className="py-3 px-4 text-center">
+                        {grupo.sede?.codigo ? (
+                          <Badge variant={grupo.sede.codigo === 'TEO' ? 'primary' : grupo.sede.codigo === 'HUA' ? 'accent' : 'default'}>
+                            {grupo.sede.codigo}
+                          </Badge>
+                        ) : grupo.sede_id ? (
+                          <Badge variant={grupo.sede_id === 1 ? 'primary' : 'accent'}>{grupo.sede_id === 1 ? 'TEO' : grupo.sede_id === 2 ? 'HUA' : grupo.sede_id}</Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-3 px-4 text-center">
                       <Badge variant="info">
                         {grupo.total_integrantes || 0}
@@ -418,6 +501,36 @@ export default function AdminGrupos() {
                   </option>
                 ))}
               </Select>
+
+              {isGeneralAdmin ? (
+                <Select
+                  label="Sede *"
+                  required
+                  value={formData.sede_id}
+                  onChange={(e) => setFormData({ ...formData, sede_id: e.target.value })}
+                >
+                  <option value="">Seleccionar sede</option>
+                  {sedes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.codigo} — {s.nombre}
+                    </option>
+                  ))}
+                  {sedes.length === 0 && (
+                    <>
+                      <option value="1">TEO — Teotitlán</option>
+                      <option value="2">HUA — Huautla</option>
+                    </>
+                  )}
+                </Select>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sede</label>
+                  <div className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                    {sedes.find((s) => String(s.id) === String(sedeId))?.codigo || (sedeId === 1 ? 'TEO' : sedeId === 2 ? 'HUA' : sedeId) || 'Auto-asignada'} — {sedes.find((s) => String(s.id) === String(sedeId))?.nombre || ''}
+                    <span className="ml-2 text-xs text-gray-400">(auto-asignada)</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <input

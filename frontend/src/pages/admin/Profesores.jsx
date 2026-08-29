@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
 import { getProfesores, createProfesor, updateProfesor, deleteProfesor } from '../../api/profesores';
+import { getSedes } from '../../api/sedes';
+import { useAuth } from '../../context/AuthContext';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Select from '../../components/ui/Select';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { Plus, Edit, Trash2, UserCheck, Users } from 'lucide-react';
 
 export default function AdminProfesores() {
+  const { isGeneralAdmin, sedeId } = useAuth();
   const [profesores, setProfesores] = useState([]);
+  const [sedes, setSedes] = useState([]);
+  const [sedeFilter, setSedeFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
@@ -23,6 +29,7 @@ export default function AdminProfesores() {
     email: '',
     password: '',
     activo: true,
+    sede_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -31,13 +38,40 @@ export default function AdminProfesores() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    loadSedes();
+  }, []);
+
+  useEffect(() => {
     loadProfesores();
+  }, [sedeFilter]);
+
+  const loadSedes = async () => {
+    try {
+      const data = await getSedes();
+      setSedes(data.sedes || []);
+    } catch (e) {
+      console.error('Error loading sedes:', e);
+    }
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      const v = e.detail;
+      if (v === 'all') setSedeFilter('');
+      else if (v === '1' || v === '2') setSedeFilter(v);
+    };
+    window.addEventListener('sede-change', handler);
+    const stored = localStorage.getItem('activeSede');
+    if (stored && stored !== 'all' && stored) setSedeFilter(stored);
+    return () => window.removeEventListener('sede-change', handler);
   }, []);
 
   const loadProfesores = async () => {
     setLoading(true);
     try {
-      const data = await getProfesores();
+      const params = {};
+      if (sedeFilter) params.sede_id = sedeFilter;
+      const data = await getProfesores(params);
       setProfesores(data || []);
     } catch (error) {
       console.error('Error loading profesores:', error);
@@ -58,6 +92,7 @@ export default function AdminProfesores() {
       email: '',
       password: '',
       activo: true,
+      sede_id: isGeneralAdmin ? '' : (sedeId || ''),
     });
     setShowModal(true);
   };
@@ -74,6 +109,7 @@ export default function AdminProfesores() {
       email: profesor.email || '',
       password: '', // No mostrar password
       activo: profesor.activo !== undefined ? profesor.activo : true,
+      sede_id: profesor.sede_id || profesor.sede?.id || sedeId || '',
     });
     setShowModal(true);
   };
@@ -88,15 +124,29 @@ export default function AdminProfesores() {
     setSaving(true);
 
     try {
+      let payload = { ...formData };
+      // auto-assign sede for sede_admin, validate for general_admin
+      if (!isGeneralAdmin) {
+        payload.sede_id = sedeId;
+      } else {
+        if (!payload.sede_id) {
+          toast.error('Seleccioná una sede');
+          setSaving(false);
+          return;
+        }
+        payload.sede_id = parseInt(payload.sede_id, 10);
+      }
+
       if (modalMode === 'edit' && selectedProfesor) {
         // No enviar password vacío
-        const dataToSend = { ...formData };
-        if (!dataToSend.password) {
-          delete dataToSend.password;
+        if (!payload.password) {
+          delete payload.password;
         }
-        await updateProfesor(selectedProfesor.id, dataToSend);
+        // sede_id shouldn't be updated via PUT (scoped), remove
+        const { sede_id: _omit, ...updateData } = payload;
+        await updateProfesor(selectedProfesor.id, updateData);
       } else {
-        await createProfesor(formData);
+        await createProfesor(payload);
       }
       closeModal();
       loadProfesores();
@@ -124,6 +174,9 @@ export default function AdminProfesores() {
 
   // Filtrar profesores
   const filteredProfesores = profesores.filter(p => {
+    if (sedeFilter && isGeneralAdmin && p.sede_id !== undefined && p.sede_id !== null) {
+      if (String(p.sede_id) !== String(sedeFilter)) return false;
+    }
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
@@ -154,22 +207,34 @@ export default function AdminProfesores() {
 
       {/* Search */}
       <Card>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Buscar profesores..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2.5 pl-10 rounded-xl input-glass"
-          />
-          <Users size={18} className="absolute left-3 top-3 text-gray-400" />
+        <div className={`grid gap-4 ${isGeneralAdmin ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
+          <div className={`${isGeneralAdmin ? 'sm:col-span-2' : ''} relative`}>
+            <input
+              type="text"
+              placeholder="Buscar profesores..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2.5 pl-10 rounded-xl input-glass"
+            />
+            <Users size={18} className="absolute left-3 top-3 text-gray-400" />
+          </div>
+          {isGeneralAdmin && (
+            <Select label="Filtrar por sede" value={sedeFilter} onChange={(e) => setSedeFilter(e.target.value)}>
+              <option value="">Todas las sedes</option>
+              {sedes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.codigo} — {s.nombre}
+                </option>
+              ))}
+            </Select>
+          )}
         </div>
       </Card>
 
       {/* Table */}
       {loading ? (
         <Card>
-          <TableSkeleton rows={8} columns={6} />
+          <TableSkeleton rows={8} columns={isGeneralAdmin ? 7 : 6} />
         </Card>
       ) : filteredProfesores.length === 0 ? (
         <Card className="text-center py-12">
@@ -205,6 +270,11 @@ export default function AdminProfesores() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">
                     Email
                   </th>
+                  {isGeneralAdmin && (
+                    <th className="text-center py-3 px-4 font-semibold text-gray-700">
+                      Sede
+                    </th>
+                  )}
                   <th className="text-center py-3 px-4 font-semibold text-gray-700">
                     Estado
                   </th>
@@ -240,6 +310,19 @@ export default function AdminProfesores() {
                         {profesor.email}
                       </span>
                     </td>
+                    {isGeneralAdmin && (
+                      <td className="py-3 px-4 text-center">
+                        {profesor.sede?.codigo ? (
+                          <Badge variant={profesor.sede.codigo === 'TEO' ? 'primary' : profesor.sede.codigo === 'HUA' ? 'accent' : 'default'}>
+                            {profesor.sede.codigo}
+                          </Badge>
+                        ) : profesor.sede_id ? (
+                          <Badge variant={profesor.sede_id === 1 ? 'primary' : 'accent'}>{profesor.sede_id === 1 ? 'TEO' : profesor.sede_id === 2 ? 'HUA' : profesor.sede_id}</Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-3 px-4 text-center">
                       <Badge variant={profesor.activo ? 'success' : 'danger'}>
                         {profesor.activo ? 'Activo' : 'Inactivo'}
@@ -401,6 +484,37 @@ export default function AdminProfesores() {
                   placeholder="••••••••"
                 />
               </div>
+
+              {isGeneralAdmin ? (
+                <Select
+                  label="Sede *"
+                  required={modalMode === 'create'}
+                  value={formData.sede_id}
+                  onChange={(e) => setFormData({ ...formData, sede_id: e.target.value })}
+                  disabled={modalMode === 'edit'}
+                >
+                  <option value="">Seleccionar sede</option>
+                  {sedes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.codigo} — {s.nombre}
+                    </option>
+                  ))}
+                  {sedes.length === 0 && (
+                    <>
+                      <option value="1">TEO — Teotitlán</option>
+                      <option value="2">HUA — Huautla</option>
+                    </>
+                  )}
+                </Select>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Sede</label>
+                  <div className="w-full px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                    {sedes.find((s) => String(s.id) === String(sedeId))?.codigo || (sedeId === 1 ? 'TEO' : sedeId === 2 ? 'HUA' : sedeId) || 'Auto-asignada'} {sedes.find((s) => String(s.id) === String(sedeId))?.nombre ? `— ${sedes.find((s) => String(s.id) === String(sedeId)).nombre}` : ''}
+                    <span className="ml-2 text-xs text-gray-400">(auto-asignada)</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <input

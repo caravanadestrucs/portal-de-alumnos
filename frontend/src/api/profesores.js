@@ -1,7 +1,7 @@
 import api from './index';
 
-export const getProfesores = async () => {
-  const response = await api.get(`/profesores`);
+export const getProfesores = async (params = {}) => {
+  const response = await api.get(`/profesores`, { params });
   return response.data.profesores || [];
 };
 

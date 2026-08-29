@@ -11,7 +11,7 @@ from flask_jwt_extended import (
 )
 from datetime import datetime, timedelta
 
-from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config
+from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config, Sede
 from utils.security import generate_tokens, validate_email, validate_numero_control, generate_reset_token, verify_reset_token
 from utils.decorators import admin_required, alumno_required
 from utils.email import send_email, render_reset_email
@@ -280,6 +280,17 @@ def register_profesor():
 
     email_lower = data['email'].lower().strip()
 
+    # sede_id validation — required, must exist (invite_token already validated above)
+    sede_id_raw = data.get('sede_id')
+    if not sede_id_raw:
+        return jsonify({'error': 'sede_id is required', 'code': 'SEDE_REQUIRED'}), 400
+    try:
+        sede_id = int(sede_id_raw)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'sede_id must be integer'}), 400
+    if not db.session.get(Sede, sede_id):
+        return jsonify({'error': 'Sede not found'}), 404
+
     # Check duplicates in Profesor and Alumno (and Admin for safety)
     if Profesor.query.filter_by(email=email_lower).first():
         return jsonify({'error': 'El email ya está registrado'}), 409
@@ -312,6 +323,7 @@ def register_profesor():
             apellido_materno=(data.get('apellido_materno') or '').strip() or None,
             titulo=(data.get('titulo') or '').strip() or None,
             email=email_lower,
+            sede_id=sede_id,
             activo=True,
         )
         profesor.set_password(data['password'])
@@ -328,6 +340,7 @@ def register_profesor():
                 'numero_empleado': profesor.numero_empleado,
                 'nombre': f"{profesor.nombre} {profesor.apellido_paterno}",
                 'email': profesor.email,
+                'sede_id': profesor.sede_id,
             },
             **tokens
         }), 201
