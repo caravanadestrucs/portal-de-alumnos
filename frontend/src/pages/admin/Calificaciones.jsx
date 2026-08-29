@@ -334,7 +334,7 @@ export default function AdminCalificaciones() {
       </div>
 
       {/* Buscador de alumnos */}
-      <Card>
+      <Card className="relative z-30 overflow-visible">
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           Buscar Alumno
         </label>
@@ -370,13 +370,13 @@ export default function AdminCalificaciones() {
           </div>
 
           {searchLoading && (
-            <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 p-4 text-center">
+            <div className="absolute z-[60] w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 p-4 text-center">
               <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary-500 border-t-transparent mx-auto"></div>
             </div>
           )}
 
           {showSuggestions && !searchLoading && searchResults.length > 0 && (
-            <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="absolute z-[60] w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden max-h-80 overflow-y-auto">
               {searchResults.map((alumno, index) => (
                 <button
                   key={alumno.id}
@@ -399,7 +399,7 @@ export default function AdminCalificaciones() {
           )}
 
           {showSuggestions && !searchLoading && searchTerm.trim() && searchResults.length === 0 && (
-            <div className="absolute z-50 w-full mt-2 bg-white rounded-xl shadow-lg border border-gray-100 p-4 text-center">
+            <div className="absolute z-[60] w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-4 text-center">
               <p className="text-gray-400 text-sm">No se encontraron alumnos</p>
             </div>
           )}
