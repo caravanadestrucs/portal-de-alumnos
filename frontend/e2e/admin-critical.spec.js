@@ -1,66 +1,88 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Admin critical paths (auth mocked)', () => {
-  test.beforeEach(async ({ page }) => {
-    // Mock localStorage para simular admin logueado sin depender de backend
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.setItem('token', 'fake-jwt-for-e2e');
-      localStorage.setItem(
-        'user',
-        JSON.stringify({ id: 1, rol: 'admin', type: 'admin', email: 'admin@universidadfv.edu.mx', nombre: 'Admin' })
-      );
-    });
+  const adminUser = {
+    id: 1,
+    rol: 'admin',
+    type: 'admin',
+    user_type: 'admin',
+    email: 'admin@universidadfv.edu.mx',
+    nombre: 'Admin',
+    role: 'general_admin',
+    sede_id: null,
+    sede: null,
+  };
 
-    // Mock all API calls so pages render shell without real backend on :5000
-    await page.route('**/api/**', async (route) => {
-      const url = route.request().url();
-      if (url.includes('/api/auth/me')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ id: 1, rol: 'admin', type: 'admin', email: 'admin@universidadfv.edu.mx', nombre: 'Admin' }),
-        });
-        return;
-      }
-      if (url.includes('/api/alumnos')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ alumnos: [], total: 0, pages: 0 }),
-        });
-        return;
-      }
-      if (url.includes('/api/carreras')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
-        return;
-      }
-      if (url.includes('/api/materias')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
-        return;
-      }
-      if (url.includes('/api/pagos')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ alumnos: [], total_adeudo: 0 }),
-        });
-        return;
-      }
+  test.beforeEach(async ({ page }) => {
+    // Ensure authenticated session before any navigation — mirrors wiki-sede helper
+    await page.addInitScript(({ token, user }) => {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    }, { token: 'fake-jwt-for-e2e', user: adminUser });
+
+    // Auth me
+    await page.route((url) => new URL(url).pathname === '/api/auth/me', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ type: 'admin', user: adminUser }),
       });
     });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/sedes'), async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ sedes: [{ id: 1, nombre: 'Teotitlan', codigo: 'TEO' }, { id: 2, nombre: 'Huautla', codigo: 'HUA' }], total: 2 }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/alumnos'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ alumnos: [], total: 0, pages: 0, page: 1 }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/carreras'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ carreras: [] }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/materias'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ materias: [] }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/pagos'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ alumnos: [], total_adeudo: 0 }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/wiki'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ pages: [], total: 0 }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/'), async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+    });
+
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(({ token, user }) => {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    }, { token: 'fake-jwt-for-e2e', user: adminUser });
   });
 
   test('admin dashboard carga con sidebar y stats', async ({ page }) => {

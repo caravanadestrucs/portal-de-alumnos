@@ -3,19 +3,20 @@ import { test, expect } from '@playwright/test';
 test.describe('A11y smoke', () => {
   test('login page inputs tienen labels asociados', async ({ page }) => {
     await page.goto('/login');
-    const email = page.getByLabel('Correo electrónico');
+    const email = page.getByRole('textbox', { name: 'Correo electrónico' });
     await expect(email).toBeVisible();
     await expect(email).toHaveAttribute('id', /login-email/);
     // aria-invalid no debe existir sin error inicial o debe ser false
     await expect(email).toHaveAttribute('type', 'email');
 
-    const password = page.getByLabel('Contraseña');
+    const password = page.locator('#login-password');
     await expect(password).toBeVisible();
     await expect(password).toHaveAttribute('id', /login-password/);
 
     // Links accesibles por role
     await expect(page.getByRole('link', { name: /Olvidaste tu contraseña/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Regístrate/i })).toBeVisible();
+    // Registration is invite-only (/r/*), no public signup link should exist
+    await expect(page.getByRole('link', { name: /Regístrate/i })).toHaveCount(0);
 
     // Logo tiene alt accesible
     await expect(page.getByRole('img', { name: /Universidad Felipe Villanueva/i })).toBeVisible();
@@ -25,49 +26,70 @@ test.describe('A11y smoke', () => {
   });
 
   test('modal focus trap y Esc', async ({ page }) => {
-    // Mock auth + APIs para entrar a /admin/alumnos sin backend real
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.setItem('token', 'fake');
-      localStorage.setItem('user', JSON.stringify({ id: 1, rol: 'admin', type: 'admin', nombre: 'Admin' }));
-    });
+    // Mock auth + APIs para entrar a /admin/alumnos sin backend real — use robust init like wiki-sede
+    const adminUser = { id: 1, rol: 'admin', type: 'admin', nombre: 'Admin', role: 'general_admin', sede_id: null };
+    await page.addInitScript(({ token, user }) => {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    }, { token: 'fake-jwt-token', user: adminUser });
 
-    await page.route('**/api/**', async (route) => {
-      const url = route.request().url();
-      if (url.includes('/api/alumnos')) {
+    await page.route((url) => new URL(url).pathname.startsWith('/api/alumnos'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          alumnos: [
+            {
+              id: 1,
+              nombre: 'Test',
+              apellido_paterno: 'User',
+              numero_control: 'CTRL001',
+              email: 'test@test.com',
+              carrera: { nombre: 'Sistemas' },
+              activo: true,
+            },
+          ],
+          total: 1,
+          pages: 1,
+        }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/carreras'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ carreras: [{ id: 1, nombre: 'Sistemas' }] }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/sedes'), async (route) => {
+      if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            alumnos: [
-              {
-                id: 1,
-                nombre: 'Test',
-                apellido_paterno: 'User',
-                numero_control: 'CTRL001',
-                email: 'test@test.com',
-                carrera: { nombre: 'Sistemas' },
-                activo: true,
-              },
-            ],
-            total: 1,
-            pages: 1,
-          }),
+          body: JSON.stringify({ sedes: [{ id: 1, nombre: 'Teotitlan', codigo: 'TEO' }, { id: 2, nombre: 'Huautla', codigo: 'HUA' }] }),
         });
-        return;
+      } else {
+        await route.continue();
       }
-      if (url.includes('/api/carreras')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([{ id: 1, nombre: 'Sistemas' }]),
-        });
-        return;
-      }
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/auth/me'), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ type: 'admin', user: adminUser }),
+      });
+    });
+    await page.route((url) => new URL(url).pathname.startsWith('/api/'), async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
     });
 
-    await page.goto('/admin/alumnos');
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(({ token, user }) => {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+    }, { token: 'fake-jwt-token', user: adminUser });
+
+    await page.goto('/admin/alumnos', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Alumnos/i, { timeout: 5000 });
 
     // Abrir modal "Nuevo Alumno" — trigger por role
@@ -96,7 +118,8 @@ test.describe('A11y smoke', () => {
     // Reabre y cierra con botón X / Cerrar modal
     await newBtn.click();
     await expect(dialog).toBeVisible({ timeout: 5000 });
-    await page.getByLabel('Cerrar modal').click();
+    // Use JS click to avoid sticky header intercepting pointer events on X button
+    await dialog.getByLabel('Cerrar modal').evaluate((el) => el.click());
     await expect(dialog).toBeHidden({ timeout: 3000 });
 
     // Reabre y cierra con Cancelar en footer

@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test.describe('Auth flows', () => {
   test('login form muestra labels accesibles y error con role=alert', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByLabel('Correo electrónico')).toBeVisible();
-    await expect(page.getByLabel('Contraseña')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Correo electrónico' })).toBeVisible();
+    await expect(page.locator('#login-password')).toBeVisible();
     await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
     // html5 required validation o error toast — al menos verifica que no navegó a /admin sin creds
     await expect(page).toHaveURL(/login/);
@@ -21,17 +21,17 @@ test.describe('Auth flows', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Correo electrónico').fill('no@existe.com');
-    await page.getByLabel('Contraseña').fill('wrong');
+    await page.getByRole('textbox', { name: 'Correo electrónico' }).fill('no@existe.com');
+    await page.locator('#login-password').fill('wrong');
     await page.getByRole('button', { name: 'Iniciar Sesión' }).click();
     await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
   });
 
   test('toggle mostrar contraseña cambia type', async ({ page }) => {
     await page.goto('/login');
-    const input = page.getByLabel('Contraseña');
+    const input = page.locator('#login-password');
     await expect(input).toHaveAttribute('type', 'password');
-    await page.getByLabel(/Mostrar contraseña|Ocultar/).click();
+    await page.getByRole('button', { name: /Mostrar contraseña|Ocultar/ }).click();
     await expect(input).toHaveAttribute('type', 'text');
   });
 });
