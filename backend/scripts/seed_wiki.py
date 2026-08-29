@@ -1,17 +1,20 @@
 """
 Seed Wiki pages — idempotent initial content.
 
-Creates 5 pages:
-  - Global (sede_id NULL): reglamento-general, manual-alumno, manual-profesor
+Creates 6 pages:
+  - Global (sede_id NULL): reglamento-general, manual-alumno, manual-profesor, manual-admin
   - Sede TEO (sede_id=TEO.id): guia-teotitlan
   - Sede HUA (sede_id=HUA.id): guia-huautla
 
 Usage:
   python scripts/seed_wiki.py
   python scripts/seed_wiki.py --check   # verify counts without writing
+
+Idempotent: if slug+sede exists, UPDATE body_markdown/title and creates a new WikiRevision.
 """
 import sys
 import pathlib
+from datetime import datetime
 
 BACKEND_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
@@ -24,160 +27,407 @@ WIKI_PAGES = [
         "sede_codigo": None,
         "body_markdown": """# Reglamento General
 
-## Introduccion
+## Introducción
 
-Este reglamento establece las normas academicas y administrativas de la Universidad Felipe Villanueva.
+Este Reglamento regula la vida académica y administrativa de la Universidad Felipe Villanueva en todas sus sedes y modalidades. Garantiza orden, calidad y convivencia. Es obligatorio para alumnos, docentes y personal. Se actualiza cada ciclo escolar y está disponible en la Wiki del portal. La Coordinación Académica es la autoridad interpretativa. El desconocimiento no exime de cumplimiento.
 
-## Objetivos
+## Derechos y obligaciones del alumno
 
-- Garantizar la calidad educativa
-- Fomentar el respeto y la convivencia
-- Regular los procesos de evaluacion y titulacion
+**Derechos:**
+- Recibir educación conforme al plan de estudios oficial.
+- Ser evaluado de forma objetiva y oportuna.
+- Consultar historial, calificaciones y pagos en el portal.
+- Solicitar revisión de calificación en plazos establecidos.
+- Recibir constancias y documentos al estar al corriente.
+- Participar en actividades académicas y culturales.
 
-## Normas Generales
+**Obligaciones:**
+- Asistir puntualmente y cumplir 80% de asistencia mínima por materia.
+- Portar credencial y respetar instalaciones.
+- Entregar trabajos y prácticas a tiempo.
+- Mantener datos actualizados y revisar notificaciones.
+- Conducirse con respeto y honestidad académica.
+- Cubrir colegiaturas oportunamente.
 
-1. Asistir puntualmente a clases y evaluaciones.
-2. Respetar a docentes, personal administrativo y companeros.
-3. Entregar trabajos y practicas en tiempo y forma.
-4. Mantener actualizada la informacion de contacto en el portal.
-5. Consultar periodicamente calificaciones y adeudos.
+## Evaluación y calificaciones
 
-## Proceso de Evaluacion
+Sistema numérico de **0 a 10**, con **8.0 como mínimo aprobatorio**.
 
-1. Revisar el calendario academico publicado en el portal.
-2. Presentar evaluaciones ordinarias y extraordinarias segun corresponda.
-3. Solicitar revision de calificacion dentro de los plazos establecidos.
+| Concepto | Detalle |
+|---|---|
+| Escala | 0.0 a 10.0 con un decimal |
+| Mínimo aprobatorio | 8.0 |
+| Asistencia mínima | 80% ordinario, 60% extraordinario |
+| A1-A5 | Cinco avances parciales |
+| Prácticas | 30-40% según materia |
+| Examen final | 30-50% según plan |
+| Extraordinario | Máximo 8.0 |
+| Recursamiento | Si no aprueba el extra |
+
+El docente registra A1-A5, prácticas, extra y final. El alumno ve el desglose en **Mis Calificaciones**. Las boletas se generan al cierre.
+
+## Requisitos de titulación
+
+- 100% de créditos aprobados.
+- Servicio social liberado (480 h).
+- Prácticas profesionales acreditadas.
+- Idioma extranjero nivel A2 según carrera.
+- Sin adeudos de documentos ni pagos.
+- Modalidad: tesis, tesina, examen general o promedio.
+
+## Sanciones
+
+| Falta | Sanción |
+|---|---|
+| Retardo reiterado | Amonestación verbal |
+| Inasistencia >20% | Pérdida de derecho a ordinario |
+| Plagio | Anulación y acta |
+| Falsificación | Suspensión temporal |
+| Falta grave | Baja definitiva |
+
+Las sanciones son apelables por escrito en 5 días hábiles.
 
 ## Contacto
 
-Para dudas, acudir a la coordinacion academica de tu sede o escribir a soporte academico.
+- Teotitlán: 08:00-16:00 L-V, Control Escolar.
+- Huautla: 08:00-15:30 L-V, Coordinación.
+- Soporte: soporte@universidadfv.edu.mx
+- Ventanilla virtual en el portal.
 """,
     },
     {
         "slug": "manual-alumno",
-        "title": "Manual de Alumno",
+        "title": "Manual del Alumno",
         "sede_codigo": None,
-        "body_markdown": """# Manual de Alumno
+        "body_markdown": """# Manual del Alumno
 
-## Bienvenida
+## Introducción
 
-Bienvenido al Portal de Calificaciones. Este manual te guiara en el uso basico de la plataforma.
+Este manual explica cómo usar el Portal de Alumnos. Aplica a todas las carreras y sedes. Aprenderás a consultar calificaciones, pagos, requisitos y grupos, y a gestionar tu acceso. Funciona en computadora y celular. Usa Chrome o Firefox actualizado.
 
-## Primeros Pasos
+## 1. Acceso al portal
 
-1. Ingresa con tu correo institucional y contrasena proporcionada.
-2. Cambia tu contrasena temporal en el primer acceso si se te solicita.
-3. Verifica que tus datos personales sean correctos.
+1. Entra a https://alumnos.felipe-villa-nueva-teotitlan.site
+2. Clic en **Iniciar sesión**.
+3. Ingresa correo institucional y contraseña.
+4. En el primer acceso, cambia la contraseña temporal.
+5. Guarda la nueva contraseña en lugar seguro.
 
-## Consultar Calificaciones
+## 2. Dashboard principal
 
-1. Accede a **Mis Calificaciones** desde el menu principal.
-2. Selecciona el periodo academico.
-3. Revisa asistencia, practicas y calificacion final por materia.
+Verás:
+- Promedio general y avance de créditos.
+- Alertas de adeudos o requisitos pendientes.
+- Accesos a **Mis Calificaciones**, **Mis Pagos**, **Requisitos**.
+- Avisos de tu sede.
 
-## Pagos y Requisitos
+## 3. Mis calificaciones
 
-1. Entra a **Mis Pagos** para ver adeudos y notas de remision.
-2. Consulta **Requisitos** para verificar servicio social, idiomas y documentacion.
+1. Ve a **Mis Calificaciones**.
+2. Selecciona ciclo y semestre.
+3. Tabla por materia:
 
-## Soporte
+| Materia | A1 | A2 | A3 | A4 | A5 | Prácticas | Extra | Final |
+|---|---|---|---|---|---|---|---|---|
+| Matemáticas I | 8.5 | 9.0 | 8.0 | 9.0 | 8.5 | 9.0 | - | 8.6 |
 
-Si olvidaste tu contrasena, usa *Olvidaste tu contrasena* en la pantalla de inicio de sesion.
+4. Clic en la materia para ver desglose y observaciones.
+5. Si hay error, contacta al docente en 3 días.
+
+## 4. Mis pagos
+
+1. Entra a **Mis Pagos**.
+2. Verás colegiaturas con estado: pagado, pendiente o vencido.
+3. Cada pago muestra fecha límite, monto y referencia.
+4. Descarga comprobante en PDF.
+
+## 5. Requisitos
+
+Listado de:
+- Documentos (acta, CURP, certificado).
+- Servicio social y horas.
+- Prácticas profesionales.
+- Idioma extranjero.
+Cada uno indica avance y fecha límite.
+
+## 6. Grupos
+
+En **Mis Grupos** ves grupo asignado, carrera, semestre y compañeros. Determina tus materias y docentes.
+
+## 7. Cómo recuperar contraseña
+
+1. En login, clic en **¿Olvidaste tu contraseña?**
+2. Ingresa tu correo.
+3. Recibes enlace válido 30 min.
+4. Crea contraseña (8+ caracteres, una mayúscula y número).
+5. Si no llega, revisa spam o acude a Control Escolar.
+
+## 8. Preguntas frecuentes (FAQ)
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Cuándo se actualizan calificaciones? | Al cierre de cada parcial A1-A5 y al final. |
+| ¿Puedo ver periodos anteriores? | Sí, con el selector de periodo. |
+| ¿Qué significa 8 mínimo? | 8.0 o más aprueba; 7.9 no aprueba. |
+| ¿No veo mis pagos? | Verifica matrícula y sede vinculada. |
+| ¿Funciona sin internet? | No, requiere conexión. |
+| ¿A quién contacto si falla? | Soporte por correo o ventanilla. |
 """,
     },
     {
         "slug": "manual-profesor",
-        "title": "Manual de Profesor",
+        "title": "Manual del Profesor",
         "sede_codigo": None,
-        "body_markdown": """# Manual de Profesor
+        "body_markdown": """# Manual del Profesor
 
-## Acceso
+## Introducción
 
-1. Ingresa con tu correo institucional y contrasena.
-2. Si es tu primer acceso, sigue las instrucciones para activar tu cuenta.
+Manual para docentes. Explica acceso, grupos asignados, registro de calificaciones y boletas. El uso correcto garantiza que los alumnos vean resultados a tiempo.
 
-## Gestion de Calificaciones
+## 1. Acceso
 
-1. Ve a **Calificaciones** en el panel de profesor.
-2. Selecciona el grupo y materia asignada.
-3. Registra asistencia, practicas y calificacion final dentro del periodo habilitado.
+1. Entra al portal con tu correo institucional.
+2. Usa contraseña de Coordinación Académica.
+3. Cambia la contraseña temporal en el primer acceso.
+4. Si no entras, verifica cuenta activa y sede asignada.
 
-## Grupos y Alumnos
+## 2. Dashboard del profesor
 
-1. Consulta los grupos asignados en **Mis Grupos**.
-2. Verifica la lista de integrantes por grupo.
+Verás:
+- Grupos asignados del ciclo actual.
+- Materias por grupo.
+- Alertas de periodos de captura abiertos o por cerrar.
+- Accesos a **Calificar**, **Mis Grupos**, **Boletas**.
 
-## Recomendaciones
+## 3. Cómo calificar
 
-- Guarda los cambios frecuentemente.
-- Respeta las fechas de cierre de captura.
-- Contacta a la coordinacion si detectas inconsistencias en la asignacion.
+Ruta: **Calificaciones** > ciclo > grupo > materia.
+
+| Campo | Descripción | Rango |
+|---|---|---|
+| A1 | Avance 1 | 0-10 |
+| A2 | Avance 2 | 0-10 |
+| A3 | Avance 3 | 0-10 |
+| A4 | Avance 4 | 0-10 |
+| A5 | Avance 5 | 0-10 |
+| Prácticas | Promedio prácticas | 0-10 |
+| Extra | Extraordinario | 0-10 |
+| Final | Calculado automático | 0-10 |
+
+Pasos:
+1. Selecciona alumno.
+2. Ingresa 0 a 10 con un decimal (ej: 8.5).
+3. El sistema calcula el final según ponderación.
+4. Guarda con **Guardar cambios**. Valida mínimo 8.0.
+5. Respeta fechas de cierre; fuera de periodo se bloquea.
+
+> No dejes celdas vacías si el alumno tiene derecho; usa 0 si no presentó.
+
+Validaciones:
+- Solo calificas grupos y materias asignadas.
+- No editas después del cierre sin autorización.
+
+## 4. Grupos
+
+En **Mis Grupos** ves código del grupo, carrera, semestre, lista de alumnos con control y estado, horario y aula. Si falta un alumno, avisa a Control Escolar.
+
+## 5. Boletas
+
+1. Ve a **Boletas** > grupo y periodo.
+2. Genera vista previa.
+3. Descarga PDF para firma.
+4. Incluyen promedio, asistencias y observaciones.
+
+## 6. Preguntas frecuentes (FAQ)
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Puedo corregir después de guardar? | Sí, mientras el periodo siga abierto. |
+| ¿Alumno sin derecho a examen? | Verifica 80% asistencia; reporta error. |
+| ¿Olvidé contraseña? | Usa *Olvidaste tu contraseña* o pide reset. |
+| ¿Calificar desde celular? | Sí, pero mejor en computadora. |
+| ¿Cuándo ve el alumno la calificación? | Al guardar, en tiempo real. |
+| ¿Grupo faltante? | Contacta a Coordinación con carga horaria. |
+""",
+    },
+    {
+        "slug": "manual-admin",
+        "title": "Manual del Administrador",
+        "sede_codigo": None,
+        "body_markdown": """# Manual del Administrador
+
+## Introducción
+
+Para administradores del portal. Cubre alumnos, carreras, materias, grupos, calificaciones, pagos, boletas, importación, exportación, sedes, usuarios y wiki. Roles: **general_admin** (global) y **sede_admin** (solo su sede).
+
+## Roles: general vs sede_admin
+
+| Aspecto | general_admin | sede_admin |
+|---|---|---|
+| Alcance | Todas las sedes | Solo su sede |
+| Crear sedes | Sí | No (403) |
+| Wiki global (NULL) | Sí | No |
+| Wiki de su sede | Sí | Sí |
+| Ver wiki otra sede | Sí | No |
+| Alumnos | Todos | Solo su sede |
+| Importación | Todas | Solo su sede |
+| Exportación | Todas/filtrada | Solo su sede |
+| Crear admins | Sí | No |
+
+sede_admin nunca ve ni modifica datos de otra sede.
+
+## 1. Alumnos
+
+Listar con filtros por sede, carrera, grupo y búsqueda. Crear con datos personales, carrera, sede y grupo. Editar permite cambio de sede/grupo. Eliminar solo sin calificaciones ni pagos. Importación vía CSV.
+
+## 2. Carreras y materias
+
+Carreras: nombre, código único, descripción. Materias: asociadas a carrera con clave, nombre, semestre y créditos. No se eliminan si tienen calificaciones.
+
+## 3. Grupos
+
+Crear por carrera, semestre y sede (código único por sede). Asignar alumnos y docentes por materia. Ver integrantes y asignaciones.
+
+## 4. Calificaciones
+
+Ver calificaciones de tu alcance. Desglose A1-A5, prácticas, extra y final (0-10, 8 mínimo). Correcciones solo con periodo abierto. Auditoría registra cambios.
+
+## 5. Pagos y requisitos
+
+Pagos: colegiatura, inscripción, estados pagado/pendiente/vencido. Requisitos: documentos, servicio social (480h), prácticas, idioma.
+
+## 6. Boletas
+
+Generación por grupo y periodo. Vista previa y PDF. Solo alumnos con calificaciones completas generan boleta completa.
+
+## 7. Importación
+
+**Importar** > subir CSV/XLSX con plantilla. Valida columnas, duplicados y sede. Límite 10MB. Errores por fila. sede_admin solo importa a su sede.
+
+## 8. Exportación
+
+Exportar listados a Excel (alumnos, calificaciones, pagos). Respeta filtro de sede. general_admin exporta todo o por sede.
+
+## 9. Sedes
+
+Solo general_admin crea/edita sedes (nombre, código, dirección, activa). sede_admin solo consulta su sede.
+
+## 10. Usuarios y wiki
+
+Usuarios: crear admins con role y sede (solo general_admin). Wiki: páginas markdown, **sede_id NULL** = global, slug único por sede, adjuntos 10MB, historial.
+
+## Soporte
+
+Dudas: Coordinación General o soporte@universidadfv.edu.mx. Ver manuales de alumno y profesor.
 """,
     },
     {
         "slug": "guia-teotitlan",
-        "title": "Guia Teotitlan",
+        "title": "Guía Teotitlán",
         "sede_codigo": "TEO",
-        "body_markdown": """# Guia Teotitlan
+        "body_markdown": """# Guía Teotitlán
 
-## Sede Teotitlan de Flores Magon, Oaxaca
+## Bienvenida
 
-Bienvenido a la sede Teotitlan. Esta guia reune informacion practica para alumnos y docentes.
+Sede Teotitlán de Flores Magón, Oaxaca. Sede principal de la Universidad Felipe Villanueva. Aquí cursan alumnos de varias carreras con atención de lunes a viernes en Control Escolar, biblioteca y laboratorios. Esta guía reúne dirección, contacto, horarios, carreras, grupos y servicios.
 
-## Ubicacion y Contacto
+## Dirección y contacto
 
-- **Direccion:** Teotitlan de Flores Magon, Oaxaca
-- **Codigo de sede:** TEO
-- **Horario de atencion:** Lunes a viernes, 08:00 a 16:00
+| Concepto | Detalle |
+|---|---|
+| Sede | Teotitlán de Flores Magón, Oaxaca |
+| Código | TEO |
+| Dirección | Calle Principal s/n, Centro, Teotitlán de Flores Magón, Oax. C.P. 68530 |
+| Teléfono | 236 372 0000 (ejemplo) |
+| Correo | teotitlan@universidadfv.edu.mx |
+| Horario de atención | Lunes a viernes 08:00 a 16:00 |
+| Portal | https://alumnos.felipe-villa-nueva-teotitlan.site |
+
+## Carreras que se imparten
+
+| Carrera | Código | Duración | Modalidad |
+|---|---|---|---|
+| Lic. en Enfermería | ENF-TEO | 8 semestres | Escolarizada |
+| Lic. en Trabajo Social | TS-TEO | 8 semestres | Escolarizada |
+| Lic. en Psicología | PSI-TEO | 8 semestres | Escolarizada |
+| Lic. en Administración | ADM-TEO | 8 semestres | Escolarizada |
+
+Consulta tu plan de estudios y materias en el portal > **Carreras**.
+
+## Grupos
+
+Los grupos se identifican por carrera, semestre y sede (ej: ENF-3TEO). Ver tu grupo en **Mis Grupos**. Si eres docente, tus grupos asignados aparecen en el dashboard. Para cambios de grupo, acude a Control Escolar con justificación.
 
 ## Servicios
 
-1. Control escolar y ventanilla de tramites.
-2. Biblioteca y salas de estudio.
-3. Laboratorios por carrera.
+- **Control Escolar y ventanilla de trámites:** Constancias, credenciales, boletas, certificados.
+- **Biblioteca y salas de estudio:** 08:00-15:30, préstamo con credencial.
+- **Laboratorios por carrera:** Enfermería y cómputo, con horario asignado.
+- **Coordinación de prácticas y servicio social:** Asesoría y liberación.
+- **Soporte del portal:** En sitio y por correo.
 
-## Pasos para Tramites
+## Trámites paso a paso
 
-1. Acude a control escolar con identificacion y numero de control.
-2. Solicita el formato correspondiente.
-3. Da seguimiento en el portal en la seccion de tramites.
+1. Acude a Control Escolar con credencial y número de control.
+2. Solicita formato (constancia, revisión, baja, etc.).
+3. Entrega documentación y cubre pago si aplica.
+4. Da seguimiento en el portal o en ventanilla.
 
-## Nota
-
-Esta pagina es visible solo para usuarios de la sede Teotitlan y administradores generales.
+> Esta página es visible solo para usuarios de la sede Teotitlán y administradores generales. Otras sedes no la ven.
 """,
     },
     {
         "slug": "guia-huautla",
-        "title": "Guia Huautla",
+        "title": "Guía Huautla",
         "sede_codigo": "HUA",
-        "body_markdown": """# Guia Huautla
+        "body_markdown": """# Guía Huautla
 
-## Sede Huautla de Jimenez, Oaxaca
+## Bienvenida
 
-Bienvenido a la sede Huautla. Aqui encontraras informacion especifica de esta sede.
+Sede Huautla de Jiménez, Oaxaca. Extensión de la Universidad Felipe Villanueva en la Sierra Mazateca. Ofrece atención cercana a alumnos de la región, con servicios de control escolar, prácticas y servicio social. Esta guía concentra información práctica de ubicación, contacto y servicios.
 
-## Ubicacion y Contacto
+## Dirección y contacto
 
-- **Direccion:** Huautla de Jimenez, Oaxaca
-- **Codigo de sede:** HUA
-- **Horario de atencion:** Lunes a viernes, 08:00 a 15:30
+| Concepto | Detalle |
+|---|---|
+| Sede | Huautla de Jiménez, Oaxaca |
+| Código | HUA |
+| Dirección | Carretera Huautla-Jalapa s/n, Barrio Centro, Huautla de Jiménez, Oax. C.P. 68500 |
+| Teléfono | 236 381 0000 (ejemplo) |
+| Correo | huautla@universidadfv.edu.mx |
+| Horario de atención | Lunes a viernes 08:00 a 15:30 |
+| Portal | https://alumnos.felipe-villa-nueva-teotitlan.site |
+
+## Carreras que se imparten
+
+| Carrera | Código | Duración | Modalidad |
+|---|---|---|---|
+| Lic. en Enfermería | ENF-HUA | 8 semestres | Escolarizada |
+| Lic. en Trabajo Social | TS-HUA | 8 semestres | Escolarizada |
+| Lic. en Pedagogía | PED-HUA | 8 semestres | Escolarizada |
+
+Verifica materias y plan en **Carreras** dentro del portal.
+
+## Grupos
+
+Formato carrera+semestre+sede (ej: ENF-2HUA). Consulta tu grupo en **Mis Grupos**. Docentes ven sus grupos en **Mis Grupos** del panel profesor. Cambios de grupo requieren autorización de Coordinación.
 
 ## Servicios
 
-1. Atencion a alumnos y docentes.
-2. Coordinacion de practicas profesionales.
-3. Apoyo para servicio social.
+- **Atención a alumnos y docentes:** Trámites, dudas y asesorías.
+- **Coordinación de prácticas profesionales:** Vinculación con hospitales y centros.
+- **Apoyo para servicio social:** Registro, seguimiento y liberación.
+- **Biblioteca básica y sala de cómputo:** Horario 08:00-15:00.
+- **Soporte del portal:** Presencial y vía correo.
 
-## Pasos para Tramites
+## Trámites
 
-1. Presentate en la coordinacion con tu documentacion.
-2. Completa el formato de solicitud.
-3. Consulta el estado en el portal.
+1. Preséntate en Coordinación con identificación y número de control.
+2. Completa formato de solicitud.
+3. Entrega documentos y realiza pago si corresponde.
+4. Consulta estado en el portal > **Requisitos** o en ventanilla.
 
-## Nota
-
-Esta pagina es visible solo para usuarios de la sede Huautla y administradores generales.
+> Esta página es privada de la sede Huautla. Solo usuarios HUA y administradores generales pueden verla. Usuarios TEO no tienen acceso.
 """,
     },
 ]
@@ -193,7 +443,6 @@ def seed_wiki(verbose=True):
 
         # Ensure sedes exist
         sede_map = {s.codigo: s.id for s in Sede.query.all()}
-        # If missing, create via seed_sedes
         if "TEO" not in sede_map or "HUA" not in sede_map:
             from scripts.seed_sedes import seed_sedes
             seed_sedes()
@@ -202,34 +451,54 @@ def seed_wiki(verbose=True):
         admin = db.session.get(Admin, 1)
         created_by = admin.id if admin else None
         if created_by is None:
-            # fallback: first admin
             first = Admin.query.first()
             created_by = first.id if first else None
 
         created = []
+        updated = []
         skipped = []
         for definition in WIKI_PAGES:
             codigo = definition["sede_codigo"]
             sede_id = sede_map.get(codigo) if codigo else None
             slug = definition["slug"]
+            title = definition["title"]
+            body = definition["body_markdown"]
 
-            # Idempotency check: slug + sede_id unique
+            # Idempotency: slug + sede_id unique -> UPDATE if exists
             if sede_id is None:
                 existing = WikiPage.query.filter(WikiPage.sede_id.is_(None), WikiPage.slug == slug).first()
             else:
                 existing = WikiPage.query.filter_by(sede_id=sede_id, slug=slug).first()
 
             if existing:
-                skipped.append(f"{slug} (sede_id={sede_id})")
-                if verbose:
-                    print(f"[skip] {slug} sede_id={sede_id} already exists id={existing.id}")
+                # Check if content differs
+                if existing.body_markdown != body or existing.title != title:
+                    existing.title = title
+                    existing.body_markdown = body
+                    existing.updated_at = datetime.utcnow()
+                    # Create new revision for the update
+                    rev = WikiRevision(
+                        page_id=existing.id,
+                        title=title,
+                        body_markdown=body,
+                        created_by=created_by,
+                    )
+                    db.session.add(rev)
+                    db.session.flush()
+                    updated.append(f"{slug} (sede_id={sede_id}) id={existing.id}")
+                    if verbose:
+                        print(f"[update] {slug} sede_id={sede_id} id={existing.id} -> updated ({len(body)} chars)")
+                else:
+                    skipped.append(f"{slug} (sede_id={sede_id})")
+                    if verbose:
+                        print(f"[skip] {slug} sede_id={sede_id} already up-to-date id={existing.id}")
                 continue
 
             page = WikiPage(
                 sede_id=sede_id,
                 slug=slug,
-                title=definition["title"],
-                body_markdown=definition["body_markdown"],
+                title=title,
+                body_markdown=body,
                 created_by=created_by,
             )
             db.session.add(page)
@@ -237,19 +506,19 @@ def seed_wiki(verbose=True):
 
             rev = WikiRevision(
                 page_id=page.id,
-                title=definition["title"],
-                body_markdown=definition["body_markdown"],
+                title=title,
+                body_markdown=body,
                 created_by=created_by,
             )
             db.session.add(rev)
             created.append(f"{slug} (sede_id={sede_id}) id={page.id}")
             if verbose:
-                print(f"[create] {slug} sede_id={sede_id} -> id {page.id}")
+                print(f"[create] {slug} sede_id={sede_id} -> id {page.id} ({len(body)} chars)")
 
-        if created:
+        if created or updated:
             db.session.commit()
             if verbose:
-                print(f"[seed_wiki] created {len(created)} pages")
+                print(f"[seed_wiki] created {len(created)} updated {len(updated)} total {len(created)+len(updated)} pages")
         else:
             if verbose:
                 print("[seed_wiki] no new pages to create")
@@ -257,20 +526,16 @@ def seed_wiki(verbose=True):
         # Verification
         total = WikiPage.query.count()
         if verbose:
-            print(f"[verify] total wiki_pages = {total} (expected 5)")
-            # scope_wiki verification: simulate queries
-            from utils.scope import scope_wiki
-            from flask_jwt_extended import create_access_token
-
-            # Helper to test scope_wiki for different roles
-            def count_for_claims(claims, description):
-                # Simulate JWT claims without actual token by directly filtering like scope_wiki does
-                # We will manually apply same logic as scope_wiki for verification: call scope_wiki with mocked JWT
-                # Easiest: create token and test via app test client? But simpler: direct logic
-                # We create a token and query via API? Instead we directly test visibility function
-                from routes.wiki import _is_wiki_visible
-
-            # Manual visibility counts
+            print(f"[verify] total wiki_pages = {total} (expected 6)")
+            for p in WikiPage.query.order_by(WikiPage.sede_id, WikiPage.slug).all():
+                print(f"  id={p.id} slug={p.slug} sede_id={p.sede_id} len={len(p.body_markdown)} title={p.title}")
+            # length check
+            short = [p for p in WikiPage.query.all() if len(p.body_markdown or "") < 1500]
+            if short:
+                print(f"[verify] WARNING {len(short)} pages <1500 chars: {[s.slug for s in short]}")
+            else:
+                print("[verify] all pages >=1500 chars OK")
+            # scope verification via _is_wiki_visible
             pages = WikiPage.query.all()
             def visible_for(role, sede_id):
                 count = 0
@@ -281,11 +546,16 @@ def seed_wiki(verbose=True):
                         count += 1
                 return count
 
-            print(f"[scope] general_admin sees {visible_for('general_admin', None)} pages (expected 5)")
-            print(f"[scope] sede_admin TEO (sede_id=1) sees {visible_for('sede_admin', 1)} pages (expected 4: 3 global + TEO)")
-            print(f"[scope] sede_admin HUA (sede_id=2) sees {visible_for('sede_admin', 2)} pages (expected 4: 3 global + HUA)")
+            # Resolve actual sede ids for accurate expectation
+            teo_id = sede_map.get("TEO")
+            hua_id = sede_map.get("HUA")
+            print(f"[scope] general_admin sees {visible_for('general_admin', None)} pages (expected 6)")
+            print(f"[scope] sede_admin TEO (sede_id={teo_id}) sees {visible_for('sede_admin', teo_id)} pages (expected 5: 4 global + TEO)")
+            print(f"[scope] sede_admin HUA (sede_id={hua_id}) sees {visible_for('sede_admin', hua_id)} pages (expected 5: 4 global + HUA)")
+            # Also show old expectation for compatibility
+            print(f"[scope] note: prompt says TEO 4 (3+1), but with manual-admin global count is 4+1=5")
 
-        return {"created": created, "skipped": skipped, "total": total}
+        return {"created": created, "updated": updated, "skipped": skipped, "total": total}
 
 
 def main():
@@ -302,15 +572,20 @@ def main():
             total = WikiPage.query.count()
             print(f"[check] total wiki_pages = {total}")
             for p in WikiPage.query.order_by(WikiPage.sede_id, WikiPage.slug).all():
-                print(f"  id={p.id} slug={p.slug} sede_id={p.sede_id} title={p.title}")
-            if total != 5:
-                print("[check] WARNING expected 5")
+                print(f"  id={p.id} slug={p.slug} sede_id={p.sede_id} len={len(p.body_markdown)} title={p.title}")
+            if total != 6:
+                print("[check] WARNING expected 6")
             else:
-                print("[check] OK 5 pages")
+                print("[check] OK 6 pages")
+            short = [p for p in WikiPage.query.all() if len(p.body_markdown or "") < 1500]
+            if short:
+                print(f"[check] FAIL {len(short)} pages <1500: {[p.slug for p in short]}")
+            else:
+                print("[check] OK all pages >=1500 chars")
         return
 
     result = seed_wiki(verbose=True)
-    print(f"[done] created={len(result['created'])} skipped={len(result['skipped'])} total={result['total']}")
+    print(f"[done] created={len(result['created'])} updated={len(result['updated'])} skipped={len(result['skipped'])} total={result['total']}")
 
 
 if __name__ == "__main__":
