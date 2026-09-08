@@ -9,7 +9,7 @@ from zipfile import ZipFile
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Alumno, Calificacion, Materia, Carrera
+from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, Asignacion, GrupoIntegrante
 from utils.decorators import admin_required
 from utils.scope import scope_by_sede
 
@@ -20,6 +20,26 @@ boletas_bp = Blueprint('boletas', __name__)
 # Lista alumnos con sus calificaciones para generar boletas
 # Query params: carrera_id, cuatrimestre, periodo
 # ============================================================
+def _alcance_periodo(periodo_id):
+    """Resuelve (alumno_ids, materia_ids) visibles para un período (slice 1).
+
+    Un alumno es visible si pertenece a un grupo asignado bajo `periodo_id`
+    y tiene al menos una calificación con `final > 0` en una materia
+    asignada bajo ese mismo período.
+    """
+    asigs = Asignacion.query.filter_by(periodo_id=periodo_id).all()
+    if not asigs:
+        return set(), set()
+    gids = [a.grupo_id for a in asigs]
+    mids = [a.materia_id for a in asigs]
+    en_grupos = {r[0] for r in db.session.query(GrupoIntegrante.alumno_id)
+                 .filter(GrupoIntegrante.grupo_id.in_(gids)).all()}
+    con_nota = {r[0] for r in db.session.query(Calificacion.alumno_id)
+                .filter(Calificacion.materia_id.in_(mids),
+                        Calificacion.calificacion_final > 0).all()}
+    return en_grupos & con_nota, set(mids)
+
+
 @boletas_bp.route('/alumnos', methods=['GET'])
 @jwt_required()
 @admin_required
@@ -48,15 +68,34 @@ def listar_alumnos_boletas():
             )
         )
     
+    periodo_ids = None
+    periodo_materias = None
+    raw_periodo = request.args.get('periodo_id')
+    if raw_periodo is not None:
+        try:
+            periodo_id = int(raw_periodo)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'periodo_id inválido'}), 422
+        if not db.session.get(Periodo, periodo_id):
+            return jsonify({'error': 'periodo_id inválido'}), 422
+        periodo_ids, periodo_materias = _alcance_periodo(periodo_id)
+
     alumnos = query.order_by(Alumno.apellido_paterno, Alumno.nombre).all()
     
     result = []
     for a in alumnos:
         # Contar calificaciones con nota
-        calif_count = Calificacion.query.filter(
+        q = Calificacion.query.filter(
             Calificacion.alumno_id == a.id,
             Calificacion.calificacion_final > 0
-        ).count()
+        )
+        if periodo_materias is not None:
+            if a.id not in periodo_ids:
+                continue
+            q = q.filter(Calificacion.materia_id.in_(list(periodo_materias)))
+        calif_count = q.count()
+        if periodo_ids is not None and calif_count == 0:
+            continue
         
         result.append({
             'id': a.id,
