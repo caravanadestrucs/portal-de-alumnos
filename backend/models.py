@@ -563,6 +563,27 @@ class GrupoIntegrante(db.Model):
         }
 
 
+class Periodo(db.Model):
+    """Catálogo de períodos (Enero-Abril 2026, Regular, ...)."""
+    __tablename__ = 'periodos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), unique=True, nullable=False)
+    fecha_inicio = db.Column(db.Date, nullable=True)
+    fecha_fin = db.Column(db.Date, nullable=True)
+    activa = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nombre': self.nombre,
+            'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
+            'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
+            'activa': self.activa,
+        }
+
+
 # ============================================================
 # MODELO DE ASIGNACION
 # ============================================================
@@ -574,6 +595,7 @@ class Asignacion(db.Model):
     profesor_id = db.Column(db.Integer, db.ForeignKey('profesores.id', ondelete='CASCADE'), nullable=False)
     materia_id = db.Column(db.Integer, db.ForeignKey('materias.id', ondelete='CASCADE'), nullable=False)
     grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id', ondelete='CASCADE'), nullable=False)
+    periodo_id = db.Column(db.Integer, db.ForeignKey('periodos.id'), nullable=True)
     
     fecha_inicio = db.Column(db.Date, nullable=False)
     fecha_fin = db.Column(db.Date, nullable=False)
@@ -583,6 +605,7 @@ class Asignacion(db.Model):
     
     # Relaciones
     materia = db.relationship('Materia', backref='asignaciones')
+    periodo = db.relationship('Periodo', backref='asignaciones')
     
     def puede_editar_calificaciones(self):
         """Verifica si actualmente está dentro del período de gestión de calificaciones"""
@@ -599,6 +622,8 @@ class Asignacion(db.Model):
             'materia': self.materia.to_dict() if self.materia else None,
             'grupo_id': self.grupo_id,
             'grupo': self.grupo.to_dict() if self.grupo else None,
+            'periodo_id': self.periodo_id,
+            'periodo_nombre': self.periodo.nombre if self.periodo else 'Sin periodo',
             'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
             'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
             'puede_editar': self.puede_editar_calificaciones(),
