@@ -21,23 +21,15 @@ boletas_bp = Blueprint('boletas', __name__)
 # Query params: carrera_id, cuatrimestre, periodo
 # ============================================================
 def _alcance_periodo(periodo_id):
-    """Resuelve (alumno_ids, materia_ids) visibles para un período (slice 1).
+    """Resuelve (alumno_ids, materia_ids) visibles para un período (slice 2).
 
-    Un alumno es visible si pertenece a un grupo asignado bajo `periodo_id`
-    y tiene al menos una calificación con `final > 0` en una materia
-    asignada bajo ese mismo período.
+    Usa la columna directa Calificacion.periodo_id. Las calificaciones
+    legacy con periodo_id NULL solo aparecen bajo "Todos".
     """
-    asigs = Asignacion.query.filter_by(periodo_id=periodo_id).all()
-    if not asigs:
-        return set(), set()
-    gids = [a.grupo_id for a in asigs]
-    mids = [a.materia_id for a in asigs]
-    en_grupos = {r[0] for r in db.session.query(GrupoIntegrante.alumno_id)
-                 .filter(GrupoIntegrante.grupo_id.in_(gids)).all()}
-    con_nota = {r[0] for r in db.session.query(Calificacion.alumno_id)
-                .filter(Calificacion.materia_id.in_(mids),
-                        Calificacion.calificacion_final > 0).all()}
-    return en_grupos & con_nota, set(mids)
+    rows = (db.session.query(Calificacion.alumno_id, Calificacion.materia_id)
+            .filter(Calificacion.periodo_id == periodo_id,
+                    Calificacion.calificacion_final > 0).all())
+    return {r[0] for r in rows}, {r[1] for r in rows}
 
 
 @boletas_bp.route('/alumnos', methods=['GET'])
@@ -262,6 +254,8 @@ def vista_previa_boleta(alumno_id):
             'calificacion': c.calificacion_final,
             'periodo': c.periodo,
             'anio': c.anio,
+            'periodo_id': c.periodo_id,
+            'periodo_nombre': c.periodo_obj.nombre if c.periodo_obj else 'Sin periodo',
         })
     
     calif_validas = [c.calificacion_final for c in calificaciones if c.calificacion_final > 0]
