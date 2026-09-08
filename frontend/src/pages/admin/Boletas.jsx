@@ -5,15 +5,17 @@ import { useToast } from '../../components/ui/Toast';
 import { Download, FileText, Search, Loader2, CheckSquare, Square, DownloadCloud } from 'lucide-react';
 import { getAlumnosBoletas, descargarBoleta, descargarBoletasMultiples, previewBoleta } from '../../api/boletas';
 import { getCarreras } from '../../api/carreras';
+import { getPeriodos } from '../../api/periodos';
 
 export default function AdminBoletas() {
   const toast = useToast();
   const [alumnos, setAlumnos] = useState([]);
   const [carreras, setCarreras] = useState([]);
+  const [periodos, setPeriodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState({});
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [filters, setFilters] = useState({ carrera_id: '', search: '' });
+  const [filters, setFilters] = useState({ carrera_id: '', search: '', periodo_id: '' });
   const [preview, setPreview] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -32,6 +34,7 @@ export default function AdminBoletas() {
       const params = {};
       if (filters.carrera_id) params.carrera_id = filters.carrera_id;
       if (filters.search) params.search = filters.search;
+      if (filters.periodo_id) params.periodo_id = filters.periodo_id;
       const res = await getAlumnosBoletas(params);
       setAlumnos(res.alumnos || []);
     } catch (error) {
@@ -41,8 +44,18 @@ export default function AdminBoletas() {
     }
   }, [filters]);
 
+  const loadPeriodos = async () => {
+    try {
+      const res = await getPeriodos();
+      setPeriodos(res.periodos || []);
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     loadCarreras();
+    loadPeriodos();
   }, []);
 
   useEffect(() => {
@@ -165,7 +178,6 @@ export default function AdminBoletas() {
           <Button
             onClick={handleDownloadAll}
             loading={downloading.all}
-            disabled={selectableAlumnos.length === 0}
           >
             <DownloadCloud size={18} />
             {selectedIds.size > 0
@@ -189,6 +201,20 @@ export default function AdminBoletas() {
       {/* Filters */}
       <Card>
         <div className="flex gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Período</label>
+            <select
+              aria-label="Período"
+              value={filters.periodo_id}
+              onChange={(e) => setFilters((prev) => ({ ...prev, periodo_id: e.target.value }))}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            >
+              <option value="">Todos</option>
+              {periodos.map((p) => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Carrera</label>
             <select
