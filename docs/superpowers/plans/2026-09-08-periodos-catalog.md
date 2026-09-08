@@ -1716,7 +1716,8 @@ def test_migracion_005_cadena_y_columna():
     c = _content()
     assert "revision = 'e5f6a7b8c9d0'" in c
     assert "down_revision = 'd4e5f6a7b8c9'" in c
-    assert "add_column('periodo_id'" in c
+    assert "add_column(sa.Column('periodo_id'" in c
+    # Controller amendment 2026-09-08 (Task 11 review): Step 3 mandates batch.add_column(sa.Column(...)); the old literal could never go green.
     assert 'fk_calificaciones_periodo_id' in c
     assert 'def downgrade():' in c
     assert "drop_column('periodo_id')" in c
