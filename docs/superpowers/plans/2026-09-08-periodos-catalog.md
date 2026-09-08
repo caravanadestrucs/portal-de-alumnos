@@ -1583,8 +1583,10 @@ In `backend/models.py`, inside `class Calificacion` after the `anio` column:
 Add the relationship after `calificaciones = ...` is not here — add next to the class body (no backref clash; `Asignacion` already uses `backref='asignaciones'` on `Periodo`, so use an explicit relationship without backref):
 
 ```python
-    periodo = db.relationship('Periodo')
+    periodo_obj = db.relationship('Periodo')
 ```
+
+> **Controller amendment 2026-09-08 (Task 10 review):** the original snippet named this `periodo`, which would rebind and unmap the legacy `periodo` String column — implemented as `periodo_obj`; Task 12 must use `c.periodo_obj.nombre`.
 
 Extend `Calificacion.to_dict()` after `'anio': self.anio,`:
 
@@ -1880,7 +1882,7 @@ In `vista_previa_boleta`, extend each item:
             'periodo': c.periodo,
             'anio': c.anio,
             'periodo_id': c.periodo_id,
-            'periodo_nombre': c.periodo.nombre if c.periodo else 'Sin periodo',
+            'periodo_nombre': c.periodo_obj.nombre if c.periodo_obj else 'Sin periodo',
         })
 ```
 
