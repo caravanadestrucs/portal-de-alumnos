@@ -17,7 +17,7 @@ def _parse_fecha_opt(value, campo):
     try:
         return datetime.strptime(value, '%Y-%m-%d').date(), None
     except ValueError:
-        return None, jsonify({'error': f'Formato inválido en {campo}. Use YYYY-MM-DD'}), 400
+        return None, (jsonify({'error': f'Formato inválido en {campo}. Use YYYY-MM-DD'}), 400)
 
 
 @periodos_bp.route('', methods=['GET'])

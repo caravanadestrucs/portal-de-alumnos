@@ -44,6 +44,11 @@ def test_post_valida_nombre_y_duplicado(client):
     assert dup.get_json()['error'] == 'Periodo ya existe'
 
 
+def test_post_fecha_invalida_responde_400(client):
+    r = client.post('/api/periodos', json={'nombre': 'X', 'fecha_inicio': 'no-fecha'}, headers=_headers())
+    assert r.status_code == 400
+
+
 def test_escritura_solo_admin_y_baja_logica(client):
     r = client.post('/api/periodos', json={'nombre': 'Regular'}, headers=_headers(utype='alumno'))
     assert r.status_code == 403
