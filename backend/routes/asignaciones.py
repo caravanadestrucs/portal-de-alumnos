@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
-from models import db, Asignacion, Profesor, Materia, Grupo
+from models import db, Asignacion, Profesor, Materia, Grupo, Periodo
 from utils.decorators import admin_required
 
 asignaciones_bp = Blueprint('asignaciones', __name__)
@@ -111,7 +111,15 @@ def create_asignacion():
     for field in required:
         if not data.get(field):
             return jsonify({'error': f'El campo {field} es requerido'}), 400
-    
+
+    periodo_id = data.get('periodo_id')
+    if periodo_id is None:
+        return jsonify({'error': 'El campo periodo_id es requerido'}), 422
+
+    periodo = db.session.get(Periodo, periodo_id)
+    if not periodo or not periodo.activa:
+        return jsonify({'error': 'periodo_id inválido o inactivo'}), 422
+
     # Verificar que existe el profesor
     profesor = db.session.get(Profesor, data['profesor_id'])
     if not profesor:
@@ -162,6 +170,7 @@ def create_asignacion():
         grupo_id=data['grupo_id'],
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
+        periodo_id=periodo.id,
         activo=data.get('activo', True)
     )
     
@@ -225,6 +234,15 @@ def update_asignacion(asignacion_id):
         except ValueError:
             return jsonify({'error': 'Formato de fecha inválido'}), 400
     
+    if 'periodo_id' in data:
+        if data['periodo_id'] is None:
+            asignacion.periodo_id = None
+        else:
+            periodo = db.session.get(Periodo, data['periodo_id'])
+            if not periodo:
+                return jsonify({'error': 'periodo_id inexistente'}), 422
+            asignacion.periodo_id = periodo.id
+
     if 'activo' in data:
         asignacion.activo = data['activo']
     

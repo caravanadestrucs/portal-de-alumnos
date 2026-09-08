@@ -20,7 +20,7 @@ from flask_jwt_extended import create_access_token
 
 from app import create_app
 from config import TestingConfig
-from models import db, Admin, Alumno, Carrera, Materia, Grupo, Profesor, Sede, Calificacion, NotaRemision
+from models import db, Admin, Alumno, Carrera, Materia, Grupo, Profesor, Sede, Calificacion, NotaRemision, Periodo
 
 
 @pytest.fixture
@@ -362,13 +362,17 @@ def test_asignaciones_scoping(app_ctx, client):
     g_hua = Grupo(nombre="AsGHUA", carrera_id=ctx["carrera"].id, sede_id=ctx["hua_sede"].id)
     db.session.add_all([g_teo, g_hua])
     db.session.commit()
+    # periodo activo (POST /api/asignaciones lo exige desde Task 4 periodos-catalog)
+    per = Periodo(nombre='Enero-Abril 2026', activa=True)
+    db.session.add(per)
+    db.session.commit()
     # create asignacion TEO (via API, need sede_admin TEO)
-    payload_teo = {"profesor_id": p_teo.id, "materia_id": m.id, "grupo_id": g_teo.id, "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31"}
+    payload_teo = {"profesor_id": p_teo.id, "materia_id": m.id, "grupo_id": g_teo.id, "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31", "periodo_id": per.id}
     resp = client.post("/api/asignaciones", json=payload_teo, headers={"Authorization": f"Bearer {ctx['teo_token']}"})
     assert resp.status_code == 201, resp.get_data(as_text=True)
     as_teo_id = resp.get_json()["asignacion"]["id"]
     # HUA asignacion
-    payload_hua = {"profesor_id": p_hua.id, "materia_id": m.id, "grupo_id": g_hua.id, "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31"}
+    payload_hua = {"profesor_id": p_hua.id, "materia_id": m.id, "grupo_id": g_hua.id, "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31", "periodo_id": per.id}
     resp2 = client.post("/api/asignaciones", json=payload_hua, headers={"Authorization": f"Bearer {ctx['hua_token']}"})
     assert resp2.status_code == 201
     as_hua_id = resp2.get_json()["asignacion"]["id"]
