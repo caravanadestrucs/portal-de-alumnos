@@ -8,6 +8,7 @@ flask-migrate
 pymysql
 flask-limiter
 openpyxl
+python-docx
 gunicorn
 
 pytest
