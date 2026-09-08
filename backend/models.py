@@ -287,6 +287,12 @@ class Calificacion(db.Model):
     
     periodo = db.Column(db.String(20))  # ej: "Enero-Abril 2026"
     anio = db.Column(db.Integer)
+    periodo_id = db.Column(db.Integer, db.ForeignKey('periodos.id'), nullable=True)
+
+    # NOTE: named periodo_obj (not periodo) — `periodo` is the legacy string
+    # column and must stay untouched; a relationship named `periodo` would
+    # silently unmap that column (verified empirically 2026-09-08).
+    periodo_obj = db.relationship('Periodo')
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -340,6 +346,8 @@ class Calificacion(db.Model):
             'calificacion_final': self.calificacion_final,
             'periodo': self.periodo,
             'anio': self.anio,
+            'periodo_id': self.periodo_id,
+            'periodo_nombre': self.periodo_obj.nombre if self.periodo_obj else 'Sin periodo',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

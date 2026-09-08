@@ -4,10 +4,26 @@ Rutas para gestión de Calificaciones
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Calificacion, Alumno, Materia
+from models import db, Alumno, Calificacion, Materia, Carrera, Asignacion, GrupoIntegrante
 from utils.decorators import admin_required
 
 calificaciones_bp = Blueprint('calificaciones', __name__)
+
+
+def _periodo_id_para_nota(materia_id, alumno_id):
+    """Hereda el periodo_id de la asignación vinculada (profesor + grupo + materia).
+
+    Busca los grupos del alumno, intersecta con las asignaciones de la materia
+    y devuelve el periodo_id de la asignación con id mayor. Sin match: None.
+    """
+    grupo_ids = [r[0] for r in db.session.query(GrupoIntegrante.grupo_id)
+                 .filter_by(alumno_id=alumno_id).all()]
+    if not grupo_ids:
+        return None
+    asig = (Asignacion.query
+            .filter(Asignacion.materia_id == materia_id, Asignacion.grupo_id.in_(grupo_ids))
+            .order_by(Asignacion.id.desc()).first())
+    return asig.periodo_id if asig else None
 
 
 def _alumno_sede_forbidden(alumno):
@@ -166,6 +182,7 @@ def create_or_update_calificacion():
             db.session.add(calificacion)
             message = 'Calificación creada exitosamente'
         
+        calificacion.periodo_id = _periodo_id_para_nota(data['materia_id'], data['alumno_id'])
         db.session.commit()
         
         return jsonify({
@@ -293,6 +310,7 @@ def update_calificacion(id):
         if 'anio' in data:
             calificacion.anio = int(data['anio'])
 
+        calificacion.periodo_id = _periodo_id_para_nota(calificacion.materia_id, calificacion.alumno_id)
         db.session.commit()
 
         return jsonify({
@@ -398,6 +416,7 @@ def bulk_create_calificaciones():
             
             if existente:
                 existente.calificacion_final = max(0, min(10, float(cal_data.get('calificacion_final', 0))))
+                existente.periodo_id = _periodo_id_para_nota(existente.materia_id, existente.alumno_id)
                 existente.practica_1 = max(0, min(10, float(cal_data.get('practica_1', 0))))
                 existente.practica_2 = max(0, min(10, float(cal_data.get('practica_2', 0))))
                 existente.extra_1 = max(0, min(10, float(cal_data.get('extra_1', 0))))
@@ -412,7 +431,8 @@ def bulk_create_calificaciones():
                     extra_2=max(0, min(10, float(cal_data.get('extra_2', 0)))),
                     calificacion_final=max(0, min(10, float(cal_data.get('calificacion_final', 0)))),
                     periodo=cal_data.get('periodo', 'Regular'),
-                    anio=cal_data.get('anio', 2026)
+                    anio=cal_data.get('anio', 2026),
+                    periodo_id=_periodo_id_para_nota(cal_data['materia_id'], cal_data['alumno_id']),
                 )
                 db.session.add(nueva)
             
