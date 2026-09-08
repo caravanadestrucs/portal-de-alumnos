@@ -3,6 +3,7 @@ import { getAsignaciones, createAsignacion, updateAsignacion, deleteAsignacion }
 import { getProfesores } from '../../api/profesores';
 import { getMaterias } from '../../api/materias';
 import { getGrupos } from '../../api/grupos';
+import { getPeriodos } from '../../api/periodos';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -17,6 +18,7 @@ export default function AdminAsignaciones() {
   const [profesores, setProfesores] = useState([]);
   const [materias, setMaterias] = useState([]);
   const [grupos, setGrupos] = useState([]);
+  const [periodos, setPeriodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
@@ -27,6 +29,7 @@ export default function AdminAsignaciones() {
     profesor_id: '',
     materia_id: '',
     grupo_id: '',
+    periodo_id: '',
     fecha_inicio: '',
     fecha_fin: '',
     activo: true,
@@ -50,16 +53,18 @@ export default function AdminAsignaciones() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [asigData, profData, matData, grpData] = await Promise.all([
+      const [asigData, profData, matData, grpData, perData] = await Promise.all([
         getAsignaciones(),
         getProfesores(),
         getMaterias(),
         getGrupos(),
+        getPeriodos(),
       ]);
       setAsignaciones(asigData || []);
       setProfesores(profData || []);
       setMaterias(matData || []);
       setGrupos(grpData || []);
+      setPeriodos(perData.periodos || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -100,6 +105,7 @@ export default function AdminAsignaciones() {
       profesor_id: '',
       materia_id: '',
       grupo_id: '',
+      periodo_id: '',
       fecha_inicio: today.toISOString().split('T')[0],
       fecha_fin: nextMonth.toISOString().split('T')[0],
       activo: true,
@@ -114,6 +120,7 @@ export default function AdminAsignaciones() {
       profesor_id: asignacion.profesor_id || '',
       materia_id: asignacion.materia_id || '',
       grupo_id: asignacion.grupo_id || '',
+      periodo_id: asignacion.periodo_id ?? '',
       fecha_inicio: asignacion.fecha_inicio || '',
       fecha_fin: asignacion.fecha_fin || '',
       activo: asignacion.activo !== undefined ? asignacion.activo : true,
@@ -137,6 +144,10 @@ export default function AdminAsignaciones() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formData.periodo_id === '' || formData.periodo_id === null) {
+      toast.error('El período es obligatorio');
+      return;
+    }
     setSaving(true);
 
     try {
@@ -251,6 +262,9 @@ export default function AdminAsignaciones() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">
                     Período
                   </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                    Fechas
+                  </th>
                   <th className="text-center py-3 px-4 font-semibold text-gray-700">
                     Puede Editar
                   </th>
@@ -277,6 +291,11 @@ export default function AdminAsignaciones() {
                     </td>
                     <td className="py-3 px-4">
                       <Badge variant="info">{a.grupo?.nombre}</Badge>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-sm text-gray-700">
+                        {a.periodo_nombre || 'Sin periodo'}
+                      </span>
                     </td>
                     <td className="py-3 px-4">
                       <span className="text-sm text-gray-500">
@@ -403,6 +422,22 @@ export default function AdminAsignaciones() {
                   ))}
                 </select>
               </div>
+
+              <Select
+                label="Período *"
+                required
+                value={formData.periodo_id}
+                onChange={(e) => setFormData({ ...formData, periodo_id: e.target.value === '' ? '' : parseInt(e.target.value) })}
+              >
+                <option value="">Seleccionar período</option>
+                {periodos
+                  .filter((p) => p.activa || (modalMode === 'edit' && p.id === (selectedAsignacion?.periodo_id ?? formData.periodo_id)))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+              </Select>
 
               {/* Fechas */}
               <div className="grid grid-cols-2 gap-4">
