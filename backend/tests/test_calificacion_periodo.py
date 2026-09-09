@@ -68,3 +68,28 @@ def test_bulk_hereda_y_sin_asignacion_queda_null(client):
     assert r.status_code in (200, 207)
     cal = Calificacion.query.filter_by(alumno_id=ids['alumno'], materia_id=ids['materia']).first()
     assert cal.periodo_id == ids['per']
+
+
+def test_profesor_put_hereda_periodo_de_asignacion_en_mano(client):
+    from datetime import date
+    c, ids = client
+    per2 = Periodo(nombre='Mayo-Agosto 2026', activa=True)
+    db.session.add(per2)
+    db.session.flush()
+    prof2 = Profesor(numero_empleado='E2', nombre='Luis', apellido_paterno='Sol',
+                     email='luis@example.com', password_hash='x')
+    db.session.add(prof2)
+    db.session.flush()
+    grupo = Grupo.query.first()
+    asig_x = Asignacion.query.filter_by(periodo_id=ids['per']).first()
+    asig_x.fecha_inicio = date(2026, 1, 1)
+    asig_x.fecha_fin = date(2026, 12, 31)
+    db.session.add(Asignacion(profesor_id=prof2.id, materia_id=ids['materia'], grupo_id=grupo.id,
+                              fecha_inicio=date(2026, 1, 1), fecha_fin=date(2026, 12, 31),
+                              periodo_id=per2.id))
+    db.session.commit()
+    r = c.put(f"/api/profesor/asignacion/{asig_x.id}/calificaciones",
+              json={'alumno_id': ids['alumno'], 'calificacion': {'calificacion_final': 9.0}},
+              headers=_h())
+    assert r.status_code == 200
+    assert r.get_json()['calificacion']['periodo_id'] == ids['per']

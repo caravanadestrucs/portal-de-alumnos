@@ -144,17 +144,22 @@ export default function AdminAsignaciones() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const isEdit = modalMode === 'edit' && selectedAsignacion;
+    let payload = formData;
     if (formData.periodo_id === '' || formData.periodo_id === null) {
-      toast.error('El período es obligatorio');
-      return;
+      if (!isEdit) {
+        toast.error('El período es obligatorio');
+        return;
+      }
+      payload = { ...formData, periodo_id: null };
     }
     setSaving(true);
 
     try {
-      if (modalMode === 'edit' && selectedAsignacion) {
-        await updateAsignacion(selectedAsignacion.id, formData);
+      if (isEdit) {
+        await updateAsignacion(selectedAsignacion.id, payload);
       } else {
-        await createAsignacion(formData);
+        await createAsignacion(payload);
       }
       closeModal();
       loadData();

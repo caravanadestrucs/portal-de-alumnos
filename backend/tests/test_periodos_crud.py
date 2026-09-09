@@ -60,3 +60,11 @@ def test_escritura_solo_admin_y_baja_logica(client):
     body = dele.get_json()
     assert body['message'] == 'Período desactivado' and body['periodo']['activa'] is False
     assert db.session.get(Periodo, pid).activa is False
+
+
+def test_put_activa_string_false_guarda_false(client):
+    pid = client.post('/api/periodos', json={'nombre': 'Regular'}, headers=_headers()).get_json()['periodo']['id']
+    r = client.put(f'/api/periodos/{pid}', json={'activa': 'false'}, headers=_headers())
+    assert r.status_code == 200
+    assert r.get_json()['periodo']['activa'] is False
+    assert db.session.get(Periodo, pid).activa is False

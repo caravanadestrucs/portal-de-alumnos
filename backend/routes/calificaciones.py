@@ -4,7 +4,7 @@ Rutas para gestión de Calificaciones
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Alumno, Calificacion, Materia, Carrera, Asignacion, GrupoIntegrante
+from models import db, Alumno, Calificacion, Materia, Asignacion, GrupoIntegrante
 from utils.decorators import admin_required
 
 calificaciones_bp = Blueprint('calificaciones', __name__)

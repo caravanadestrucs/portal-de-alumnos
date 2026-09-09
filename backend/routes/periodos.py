@@ -20,6 +20,21 @@ def _parse_fecha_opt(value, campo):
         return None, (jsonify({'error': f'Formato inválido en {campo}. Use YYYY-MM-DD'}), 400)
 
 
+def _parse_activa(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ('true', '1'):
+            return True
+        if v in ('false', '0'):
+            return False
+        return bool(v)
+    return bool(value)
+
+
 @periodos_bp.route('', methods=['GET'])
 @jwt_required()
 def listar_periodos():
@@ -46,7 +61,7 @@ def crear_periodo():
     if err:
         return err
     periodo = Periodo(nombre=nombre, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
-                      activa=data.get('activa', True))
+                      activa=_parse_activa(data.get('activa', True)))
     db.session.add(periodo)
     db.session.commit()
     return jsonify({'message': 'Período creado exitosamente', 'periodo': periodo.to_dict()}), 201
@@ -79,7 +94,7 @@ def actualizar_periodo(periodo_id):
             return err
         periodo.fecha_fin = fecha_fin
     if 'activa' in data:
-        periodo.activa = bool(data['activa'])
+        periodo.activa = _parse_activa(data['activa'])
     db.session.commit()
     return jsonify({'message': 'Período actualizado exitosamente', 'periodo': periodo.to_dict()}), 200
 

@@ -9,7 +9,7 @@ from zipfile import ZipFile
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, Asignacion, GrupoIntegrante
+from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, GrupoIntegrante
 from utils.decorators import admin_required
 from utils.scope import scope_by_sede
 
@@ -46,7 +46,6 @@ def listar_alumnos_boletas():
         query = query.filter_by(carrera_id=carrera_id)
     
     if grupo_id:
-        from models import GrupoIntegrante
         alumno_ids = db.session.query(GrupoIntegrante.alumno_id).filter_by(grupo_id=grupo_id)
         query = query.filter(Alumno.id.in_(alumno_ids))
     
@@ -61,16 +60,16 @@ def listar_alumnos_boletas():
         )
     
     periodo_ids = None
-    periodo_materias = None
+    periodo_id_filter = None
     raw_periodo = request.args.get('periodo_id')
     if raw_periodo is not None:
         try:
-            periodo_id = int(raw_periodo)
+            periodo_id_filter = int(raw_periodo)
         except (TypeError, ValueError):
             return jsonify({'error': 'periodo_id inválido'}), 422
-        if not db.session.get(Periodo, periodo_id):
+        if not db.session.get(Periodo, periodo_id_filter):
             return jsonify({'error': 'periodo_id inválido'}), 422
-        periodo_ids, periodo_materias = _alcance_periodo(periodo_id)
+        periodo_ids, _ = _alcance_periodo(periodo_id_filter)
 
     alumnos = query.order_by(Alumno.apellido_paterno, Alumno.nombre).all()
     
@@ -81,10 +80,10 @@ def listar_alumnos_boletas():
             Calificacion.alumno_id == a.id,
             Calificacion.calificacion_final > 0
         )
-        if periodo_materias is not None:
+        if periodo_ids is not None:
             if a.id not in periodo_ids:
                 continue
-            q = q.filter(Calificacion.materia_id.in_(list(periodo_materias)))
+            q = q.filter(Calificacion.periodo_id == periodo_id_filter)
         calif_count = q.count()
         if periodo_ids is not None and calif_count == 0:
             continue

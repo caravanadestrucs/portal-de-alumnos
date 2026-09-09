@@ -241,6 +241,8 @@ def update_asignacion(asignacion_id):
             periodo = db.session.get(Periodo, data['periodo_id'])
             if not periodo:
                 return jsonify({'error': 'periodo_id inexistente'}), 422
+            if periodo.nombre == 'Sin periodo':
+                return jsonify({'error': 'periodo_id reservado'}), 422
             asignacion.periodo_id = periodo.id
 
     if 'activo' in data:

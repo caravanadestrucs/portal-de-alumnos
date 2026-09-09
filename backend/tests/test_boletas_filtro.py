@@ -70,7 +70,7 @@ def test_filtro_por_periodo_solo_lista_visible(client):
 
 def test_filtro_slice2_usa_columna_directa(client):
     c, ids = client
-    cal = Calificacion.query.filter_by(calificacion_final=9.0).first()
+    cal = Calificacion.query.filter_by(calificacion_final=9.0).order_by(Calificacion.id).first()
     cal.periodo_id = ids['p1']
     db.session.commit()
     f1 = c.get(f"/api/boletas/alumnos?periodo_id={ids['p1']}", headers=_h()).get_json()['alumnos']
@@ -108,3 +108,16 @@ def test_sin_vinculacion_queda_sin_periodo(client):
     body = r.get_json()['calificacion']
     assert body['periodo_id'] is None
     assert body['periodo_nombre'] == 'Sin periodo'
+
+
+def test_filtro_periodo_cuenta_solo_periodo_propio(client):
+    c, ids = client
+    a1 = Alumno.query.filter_by(numero_control='A1').first()
+    m1 = Materia.query.filter_by(codigo='CAL-1').first()
+    db.session.add(Calificacion(alumno_id=a1.id, materia_id=m1.id, calificacion_final=8.0,
+                                periodo='Regular', anio=2026, periodo_id=ids['p2']))
+    db.session.commit()
+    f1 = c.get(f"/api/boletas/alumnos?periodo_id={ids['p1']}", headers=_h()).get_json()['alumnos']
+    row = [a for a in f1 if a['numero_control'] == 'A1']
+    assert len(row) == 1
+    assert row[0]['calificaciones_count'] == 1

@@ -6,7 +6,6 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, date
 
 from models import db, Asignacion, GrupoIntegrante, Calificacion
-from routes.calificaciones import _periodo_id_para_nota
 
 profesor_bp = Blueprint('profesor', __name__)
 
@@ -73,7 +72,7 @@ def get_calificaciones_asignacion(asignacion_id):
                 materia_id=asignacion.materia_id,
                 periodo=f"Enero-Abril {datetime.now().year}",
                 anio=datetime.now().year,
-                periodo_id=_periodo_id_para_nota(asignacion.materia_id, integ.alumno_id),
+                periodo_id=asignacion.periodo_id,
             )
             db.session.add(calif)
             db.session.flush()
@@ -149,7 +148,7 @@ def update_calificaciones(asignacion_id):
             else:
                 setattr(calif, campo, max(0, min(10, float(valor))))
     
-    calif.periodo_id = _periodo_id_para_nota(asignacion.materia_id, alumno_id)
+    calif.periodo_id = asignacion.periodo_id
     try:
         db.session.commit()
     except Exception as e:

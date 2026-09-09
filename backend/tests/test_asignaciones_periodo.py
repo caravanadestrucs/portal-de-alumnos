@@ -72,3 +72,13 @@ def test_put_edita_periodo_incluido_inactivo_y_nulo(client):
     assert clear.get_json()['asignacion']['periodo_nombre'] == 'Sin periodo'
     listed = c.get('/api/asignaciones', headers=_h()).get_json()['asignaciones']
     assert any(a['id'] == aid and a['periodo_nombre'] == 'Sin periodo' for a in listed)
+
+
+def test_put_rechaza_periodo_reservado_sin_periodo(client):
+    c, ids = client
+    reservado = Periodo(nombre='Sin periodo', activa=False)
+    db.session.add(reservado)
+    db.session.commit()
+    aid = c.post('/api/asignaciones', json=_body(ids, periodo_id=ids['activo']), headers=_h()).get_json()['asignacion']['id']
+    r = c.put(f'/api/asignaciones/{aid}', json={'periodo_id': reservado.id}, headers=_h())
+    assert r.status_code == 422
