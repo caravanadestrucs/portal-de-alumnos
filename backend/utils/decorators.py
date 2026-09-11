@@ -273,3 +273,71 @@ def sede_scoped_admin_required(fn):
                 'code': 'INVALID_TOKEN'
             }), 401
     return wrapper
+
+
+from functools import wraps as _wraps
+from flask import jsonify as _jsonify, g as _g, request as _request
+from flask_jwt_extended import verify_jwt_in_request as _verify, get_jwt as _get_jwt
+
+def forbidden_uniform():
+    return _jsonify({'error': 'Forbidden', 'code': 'CROSS_SEDE'}), 403
+
+def public_route(fn):
+    fn._portal_scope = 'public'
+    return fn
+
+def global_route(fn):
+    fn._portal_scope = 'global'
+    return fn
+
+def require_sede(_fn=None, *, resolve="body_sede_id"):
+    def deco(fn):
+        @_wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                _verify()
+            except Exception:
+                return _jsonify({'error': 'Token inválido o expirado.', 'code': 'INVALID_TOKEN'}), 401
+            claims = _get_jwt()
+            role = claims.get('role')
+            token_sede = claims.get('sede_id')
+            user_type = claims.get('user_type') or claims.get('type')
+            # Resolver sede objetivo: body ? query ? join la resuelve el handler vía g
+            target = None
+            try:
+                body = _request.get_json(silent=True) or {}
+                if isinstance(body, dict) and body.get('sede_id') is not None:
+                    target = int(body.get('sede_id'))
+            except Exception:
+                target = None
+            if target is None:
+                qs = _request.args.get('sede_id', type=int)
+                if qs is not None:
+                    if role not in ('general_admin', 'general') and (user_type != 'admin' or role is None):
+                        # rol no-general enviando ?sede_id → 403 e ignorar para scope
+                        if role in ('sede_admin',) or user_type in ('profesor', 'alumno'):
+                            return forbidden_uniform()
+                    if role in ('general_admin', 'general') or (user_type == 'admin' and role is None):
+                        target = qs
+            # Autorizar
+            if role == 'sede_admin':
+                if token_sede is None:
+                    return forbidden_uniform()
+                if target is not None and int(target) != int(token_sede):
+                    return forbidden_uniform()
+                _g.scoped_sede_id = token_sede
+            elif role in ('general_admin', 'general') or (user_type == 'admin' and role is None):
+                _g.scoped_sede_id = target  # None = todas (list) ; write exige sede explícita (Task 5)
+            elif user_type in ('profesor', 'alumno'):
+                _g.scoped_sede_id = token_sede
+                if target is not None and token_sede is not None and int(target) != int(token_sede):
+                    return forbidden_uniform()
+            else:
+                return forbidden_uniform()
+            fn._portal_scope = 'sede'
+            return fn(*args, **kwargs)
+        wrapper._portal_scope = 'sede'
+        return wrapper
+    if _fn is not None:
+        return deco(_fn)
+    return deco
