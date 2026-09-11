@@ -473,7 +473,7 @@ class Profesor(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     activo = db.Column(db.Boolean, default=True)
-    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id', name='fk_profesor_sede'), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
