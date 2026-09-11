@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
 
 from models import db, Alumno, Carrera, Materia, Calificacion, Sede
-from utils.decorators import admin_required, get_admin_or_403, general_admin_required, require_sede
+from utils.decorators import admin_required, get_admin_or_403, general_admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 from extensions import limiter
 from utils.mail import send_credentials_email
@@ -193,18 +193,22 @@ def get_alumno(id):
     Obtiene un alumno por ID (admin o el propio alumno) — scoped by sede for admins.
     """
     claims = get_jwt()
-    alumno = Alumno.query.get_or_404(id)
+    # Self-access check first: non-self alumno ids always 403 (no existence leak).
+    if claims.get('type') == 'alumno' and claims['id'] != id:
+        return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
+    alumno = db.session.get(Alumno, id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
 
     # Admin sede scoping: sede_admin can only view own sede
     if (claims.get('user_type') or claims.get('type')) == 'admin':
         role = claims.get('role')
         token_sede = claims.get('sede_id')
         if role == 'sede_admin' and alumno.sede_id != token_sede:
-            return jsonify({'error': 'Cross-sede access forbidden', 'code': 'CROSS_SEDE'}), 403
-    
-    # Verificar permisos: solo el admin o el propio alumno pueden ver
-    if claims.get('type') == 'alumno' and claims['id'] != id:
-        return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
+            return forbidden_uniform()
     
     return jsonify({'alumno': alumno.to_dict()}), 200
 

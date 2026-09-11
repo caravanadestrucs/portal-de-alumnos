@@ -282,6 +282,25 @@ from flask_jwt_extended import verify_jwt_in_request as _verify, get_jwt as _get
 def forbidden_uniform():
     return _jsonify({'error': 'Forbidden', 'code': 'CROSS_SEDE'}), 403
 
+def has_global_scope(claims):
+    """True when claims carry global (cross-sede) scope: general roles, or a
+    legacy admin token without role (same taxonomy as require_sede)."""
+    role = (claims or {}).get('role')
+    if role in ('general_admin', 'general'):
+        return True
+    if ((claims or {}).get('user_type') or (claims or {}).get('type')) == 'admin' and role is None:
+        return True
+    return False
+
+
+def uniform_missing_response(claims):
+    """Detail anti-enumeration for missing resources: return None when the
+    caller has global scope (caller then returns its real 404), otherwise
+    return uniform 403 so ids cannot be probed across sedes."""
+    if has_global_scope(claims):
+        return None
+    return forbidden_uniform()
+
 def public_route(fn):
     fn._portal_scope = 'public'
     return fn

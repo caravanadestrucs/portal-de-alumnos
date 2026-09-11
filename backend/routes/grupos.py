@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 
 from sqlalchemy.orm import joinedload
 from models import db, Grupo, GrupoIntegrante, Alumno, Carrera, Sede
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 
 grupos_bp = Blueprint('grupos', __name__)
@@ -66,9 +66,14 @@ def get_grupo(grupo_id):
     """
     Obtiene un grupo por ID con sus integrantes — scoped
     """
-    grupo = Grupo.query.get_or_404(grupo_id)
+    grupo = db.session.get(Grupo, grupo_id)
+    if grupo is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Grupo no encontrado'}), 404
     if _grupo_sede_forbidden(grupo):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     return jsonify({
         'grupo': grupo.to_dict(),
@@ -216,9 +221,14 @@ def get_integrantes(grupo_id):
     """
     Obtiene los integrantes de un grupo — scoped
     """
-    grupo = Grupo.query.options(joinedload(Grupo.carrera)).get_or_404(grupo_id)
+    grupo = db.session.get(Grupo, grupo_id)
+    if grupo is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Grupo no encontrado'}), 404
     if _grupo_sede_forbidden(grupo):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     integrantes = GrupoIntegrante.query.filter_by(grupo_id=grupo_id).options(joinedload(GrupoIntegrante.alumno)).all()
     

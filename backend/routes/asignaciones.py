@@ -7,7 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, Asignacion, Profesor, Materia, Grupo, Periodo
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 
 asignaciones_bp = Blueprint('asignaciones', __name__)
 
@@ -90,9 +90,14 @@ def get_asignacion(asignacion_id):
     """
     Obtiene una asignacion por ID — scoped
     """
-    asignacion = Asignacion.query.get_or_404(asignacion_id)
+    asignacion = db.session.get(Asignacion, asignacion_id)
+    if asignacion is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Asignacion no encontrada'}), 404
     if _asig_forbidden(asignacion):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     return jsonify({'asignacion': asignacion.to_dict()}), 200
 
 

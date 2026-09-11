@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Alumno, Calificacion, Materia, Asignacion, GrupoIntegrante
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 
 calificaciones_bp = Blueprint('calificaciones', __name__)
 
@@ -46,9 +46,14 @@ def get_alumno_calificaciones(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Filtros opcionales
     periodo = request.args.get('periodo')
@@ -211,9 +216,14 @@ def get_historial(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver este historial'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Obtener todas las calificaciones
     calificaciones = Calificacion.query.filter_by(alumno_id=alumno_id)\
@@ -259,7 +269,12 @@ def get_calificacion(id):
     """
     Obtiene una calificación por ID — scoped
     """
-    calificacion = Calificacion.query.get_or_404(id)
+    calificacion = db.session.get(Calificacion, id)
+    if calificacion is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Calificación no encontrada'}), 404
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != calificacion.alumno_id:
@@ -267,7 +282,7 @@ def get_calificacion(id):
     # admin sede check via alumno
     alumno = db.session.get(Alumno, calificacion.alumno_id)
     if alumno and _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     return jsonify({'calificacion': calificacion.to_dict()}), 200
 

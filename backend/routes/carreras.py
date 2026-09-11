@@ -5,12 +5,16 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
 from models import db, Carrera, Materia, Alumno
-from utils.decorators import admin_required, require_sede, public_route
+from utils.decorators import admin_required, require_sede, public_route, global_route
 from utils.scope import scope_by_sede
 
 carreras_bp = Blueprint('carreras', __name__)
 
 
+# Public by exception: consumed logged-out by registration
+# (frontend/src/pages/auth/Register.jsx via hidden invite link) for the carrera
+# selector. Intentional exception to the auth-only public allow-list; catalog data
+# is non-sensitive. Verified: no other logged-out consumers.
 @carreras_bp.route('', methods=['GET'])
 @public_route
 def list_carreras():
@@ -78,7 +82,7 @@ def create_carrera():
 
 
 @carreras_bp.route('/<int:id>', methods=['GET'])
-@public_route
+@global_route
 def get_carrera(id):
     """
     Obtiene una carrera por ID
@@ -160,7 +164,7 @@ def delete_carrera(id):
 
 
 @carreras_bp.route('/<int:id>/materias', methods=['GET'])
-@public_route
+@global_route
 def get_carrera_materias(id):
     """
     Obtiene las materias de una carrera

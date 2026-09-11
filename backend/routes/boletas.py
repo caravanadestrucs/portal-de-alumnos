@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, GrupoIntegrante
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 
 boletas_bp = Blueprint('boletas', __name__)
@@ -116,11 +116,15 @@ def _boleta_forbidden(alumno):
 @admin_required
 @require_sede
 def descargar_boleta(alumno_id):
+    claims = get_jwt()
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({'error': 'Alumno no encontrado'}), 404
     if _boleta_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     
@@ -235,11 +239,15 @@ def descargar_boletas_multiples():
 @admin_required
 @require_sede
 def vista_previa_boleta(alumno_id):
+    claims = get_jwt()
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({'error': 'Alumno no encontrado'}), 404
     if _boleta_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     

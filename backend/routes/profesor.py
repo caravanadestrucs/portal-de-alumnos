@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, date
 
 from models import db, Asignacion, GrupoIntegrante, Calificacion
-from utils.decorators import require_sede
+from utils.decorators import require_sede, forbidden_uniform, uniform_missing_response
 
 profesor_bp = Blueprint('profesor', __name__)
 
@@ -46,11 +46,16 @@ def get_calificaciones_asignacion(asignacion_id):
     user_type = claims.get('type')
     user_id = claims.get('id')
     
-    asignacion = Asignacion.query.get_or_404(asignacion_id)
+    asignacion = db.session.get(Asignacion, asignacion_id)
+    if asignacion is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Asignacion no encontrada'}), 404
     
     # Solo el profesor asignado o un admin pueden ver
     if user_type != 'admin' and (user_type != 'profesor' or user_id != asignacion.profesor_id):
-        return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
+        return forbidden_uniform()
     
     integrantes = GrupoIntegrante.query.filter_by(
         grupo_id=asignacion.grupo_id

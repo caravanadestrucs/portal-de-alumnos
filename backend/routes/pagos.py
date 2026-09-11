@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, NotaRemision, Alumno, Admin
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 
 pagos_bp = Blueprint('pagos', __name__)
 
@@ -30,9 +30,14 @@ def get_alumno_pagos(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver estos pagos'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _pago_alumno_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Filtros
     pagada = request.args.get('pagada')
@@ -178,7 +183,12 @@ def get_nota(id):
     """
     Obtiene una nota por ID — scoped
     """
-    nota = NotaRemision.query.get_or_404(id)
+    nota = db.session.get(NotaRemision, id)
+    if nota is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Nota no encontrada'}), 404
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != nota.alumno_id:
@@ -186,7 +196,7 @@ def get_nota(id):
     if (claims.get('user_type') or claims.get('type')) == 'admin' and claims.get('role') == 'sede_admin':
         alumno = db.session.get(Alumno, nota.alumno_id)
         if alumno and alumno.sede_id != claims.get('sede_id'):
-            return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+            return forbidden_uniform()
     
     return jsonify({'nota': nota.to_dict()}), 200
 

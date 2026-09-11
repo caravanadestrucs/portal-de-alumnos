@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Profesor, Sede
-from utils.decorators import admin_required, require_sede
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 
 profesores_bp = Blueprint('profesores', __name__)
@@ -59,9 +59,14 @@ def get_profesor(profesor_id):
     """
     Obtiene un profesor por ID — scoped
     """
-    profesor = Profesor.query.get_or_404(profesor_id)
+    profesor = db.session.get(Profesor, profesor_id)
+    if profesor is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Profesor no encontrado'}), 404
     if _prof_sede_forbidden(profesor):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     return jsonify({'profesor': profesor.to_dict()}), 200
 
 
