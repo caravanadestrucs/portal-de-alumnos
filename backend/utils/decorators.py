@@ -347,6 +347,15 @@ def require_sede(_fn=None, *, resolve="body_sede_id"):
                 _g.scoped_sede_id = token_sede
             elif role in ('general_admin', 'general') or (user_type == 'admin' and role is None):
                 _g.scoped_sede_id = target  # None = todas (list) ; write exige sede explícita (Task 5)
+                if role in ('general_admin', 'general') and target is not None:
+                    try:
+                        from models import db as _db, AuditLog as _Audit
+                        _db.session.add(_Audit(actor_id=claims.get('id'), actor_role=role,
+                            method=_request.method, path=_request.path, target_sede_id=int(target)))
+                        _db.session.commit()
+                    except Exception:
+                        try: _db.session.rollback()
+                        except Exception: pass
             elif user_type in ('profesor', 'alumno'):
                 _g.scoped_sede_id = token_sede
                 if target is not None and token_sede is not None and int(target) != int(token_sede):

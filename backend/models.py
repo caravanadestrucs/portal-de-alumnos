@@ -735,3 +735,20 @@ class WikiAttachment(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
+
+# ============================================================
+# MODELO DE AUDITORIA — ?sede_id explícito de general (Slice 1 Task 5)
+# ============================================================
+class AuditLog(db.Model):
+    """Best-effort audit of general acting with an explicit sede target."""
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, nullable=False, index=True)
+    actor_role = db.Column(db.String(30), nullable=False)
+    method = db.Column(db.String(10), nullable=False)
+    path = db.Column(db.String(300), nullable=False)
+    target_sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id', name='fk_audit_sede'), nullable=True, index=True)
+    resource_ids = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
