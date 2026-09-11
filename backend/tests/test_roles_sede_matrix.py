@@ -108,3 +108,94 @@ def test_refresh_preserves_sede_slug(app_ctx, client):
         claims = decode_token(resp2.get_json()["access_token"])
     assert claims["sede_id"] == sede.id
     assert claims["sede_slug"] == "TEO"
+
+
+def _sede_token(app_ctx, adm):
+    from flask_jwt_extended import create_access_token
+    return create_access_token(identity=str(adm.id),
+        additional_claims={"id": adm.id, "type": "admin", "role": "general_admin", "sede_id": None})
+
+
+def test_assign_profesor_grupo_mismatch_403(app_ctx, client):
+    from models import db, Sede, Carrera, Profesor, Grupo, Admin, Materia, Periodo
+    teo = Sede(nombre="Teotitlan", codigo="TEO"); hua = Sede(nombre="Huautla", codigo="HUA")
+    db.session.add_all([teo, hua]); db.session.commit()
+    car = Carrera(nombre="C", codigo="CX2", descripcion="t"); db.session.add(car); db.session.commit()
+    p = Profesor(numero_empleado="PROF-MM1", nombre="P", apellido_paterno="X",
+                 email="mm1@t.com", password_hash="x", sede_id=teo.id, activo=True)
+    p.set_password("pass123"); db.session.add(p)
+    g = Grupo(nombre="A", carrera_id=car.id, sede_id=hua.id); db.session.add(g)
+    adm = Admin(username="mmg", email="mmg@t.com", nombre="G", role="general_admin", sede_id=None)
+    adm.set_password("s3cret!"); db.session.add(adm); db.session.commit()
+    tok = _sede_token(app_ctx, adm)
+    m = Materia(carrera_id=car.id, nombre="Mat", codigo="MAT1"); db.session.add(m)
+    per = Periodo(nombre="P-MM1", activa=True); db.session.add(per); db.session.commit()
+    resp = client.post("/api/asignaciones",
+        json={"profesor_id": p.id, "materia_id": m.id, "grupo_id": g.id,
+              "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31",
+              "periodo_id": per.id},
+        headers={"Authorization": f"Bearer {tok}"})
+    assert resp.status_code == 403
+    assert resp.get_json()["code"] == "CROSS_SEDE"
+
+
+def test_assign_same_sede_201_echoes_sedes(app_ctx, client):
+    from models import db, Sede, Carrera, Profesor, Grupo, Admin, Materia, Periodo
+    teo = Sede(nombre="Teotitlan", codigo="TEO"); db.session.add(teo); db.session.commit()
+    car = Carrera(nombre="C", codigo="CX3", descripcion="t"); db.session.add(car); db.session.commit()
+    p = Profesor(numero_empleado="PROF-SS1", nombre="P", apellido_paterno="X",
+                 email="ss1@t.com", password_hash="x", sede_id=teo.id, activo=True)
+    p.set_password("pass123"); db.session.add(p)
+    g = Grupo(nombre="A", carrera_id=car.id, sede_id=teo.id); db.session.add(g)
+    adm = Admin(username="ssg", email="ssg@t.com", nombre="G", role="general_admin", sede_id=None)
+    adm.set_password("s3cret!"); db.session.add(adm); db.session.commit()
+    tok = _sede_token(app_ctx, adm)
+    m = Materia(carrera_id=car.id, nombre="Mat", codigo="MAT2"); db.session.add(m)
+    per = Periodo(nombre="P-SS1", activa=True); db.session.add(per); db.session.commit()
+    resp = client.post("/api/asignaciones",
+        json={"profesor_id": p.id, "materia_id": m.id, "grupo_id": g.id,
+              "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31",
+              "periodo_id": per.id},
+        headers={"Authorization": f"Bearer {tok}"})
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["profesor_sede_id"] == teo.id
+    assert body["grupo_sede_id"] == teo.id
+
+
+def test_update_asignacion_mismatch_403(app_ctx, client):
+    from models import db, Sede, Carrera, Profesor, Grupo, Admin, Materia, Periodo
+    teo = Sede(nombre="Teotitlan", codigo="TEO"); hua = Sede(nombre="Huautla", codigo="HUA")
+    db.session.add_all([teo, hua]); db.session.commit()
+    car = Carrera(nombre="C", codigo="CX4", descripcion="t"); db.session.add(car); db.session.commit()
+    p = Profesor(numero_empleado="PROF-UM1", nombre="P", apellido_paterno="X",
+                 email="um1@t.com", password_hash="x", sede_id=teo.id, activo=True)
+    p.set_password("pass123"); db.session.add(p)
+    g_teo = Grupo(nombre="A", carrera_id=car.id, sede_id=teo.id); db.session.add(g_teo)
+    g_hua = Grupo(nombre="B", carrera_id=car.id, sede_id=hua.id); db.session.add(g_hua)
+    adm = Admin(username="umg", email="umg@t.com", nombre="G", role="general_admin", sede_id=None)
+    adm.set_password("s3cret!"); db.session.add(adm); db.session.commit()
+    tok = _sede_token(app_ctx, adm)
+    m = Materia(carrera_id=car.id, nombre="Mat", codigo="MAT3"); db.session.add(m)
+    per = Periodo(nombre="P-UM1", activa=True); db.session.add(per); db.session.commit()
+    created = client.post("/api/asignaciones",
+        json={"profesor_id": p.id, "materia_id": m.id, "grupo_id": g_teo.id,
+              "fecha_inicio": "2026-01-01", "fecha_fin": "2026-12-31",
+              "periodo_id": per.id},
+        headers={"Authorization": f"Bearer {tok}"})
+    assert created.status_code == 201
+    aid = created.get_json()["asignacion"]["id"]
+    resp = client.put(f"/api/asignaciones/{aid}", json={"grupo_id": g_hua.id},
+        headers={"Authorization": f"Bearer {tok}"})
+    assert resp.status_code == 403
+    assert resp.get_json()["code"] == "CROSS_SEDE"
+
+
+def test_validate_same_sede_unit():
+    from utils.validators import validate_same_sede, SameSedeError
+    import pytest as _pytest
+    class _O:
+        def __init__(self, sede_id): self.sede_id = sede_id
+    assert validate_same_sede(_O(1), _O(1)) is True
+    with _pytest.raises(SameSedeError):
+        validate_same_sede(_O(1), _O(2))

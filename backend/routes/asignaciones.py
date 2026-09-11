@@ -8,6 +8,7 @@ from datetime import datetime
 
 from models import db, Asignacion, Profesor, Materia, Grupo, Periodo
 from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
+from utils.validators import validate_same_sede, SameSedeError
 
 asignaciones_bp = Blueprint('asignaciones', __name__)
 
@@ -143,6 +144,13 @@ def create_asignacion():
     if not grupo:
         return jsonify({'error': 'Grupo no encontrado'}), 404
 
+    # Dominio: profesor y grupo deben pertenecer a la misma sede (spec §6.3).
+    # Mismatch → 403 uniforme sin enumerar (igual para general y sede_admin).
+    try:
+        validate_same_sede(profesor, grupo)
+    except SameSedeError:
+        return forbidden_uniform()
+
     # sede scoping: all must belong to same sede for sede_admin
     claims = get_jwt()
     if claims.get('role') == 'sede_admin':
@@ -192,6 +200,8 @@ def create_asignacion():
     
     return jsonify({
         'message': 'Asignación creada exitosamente',
+        'profesor_sede_id': profesor.sede_id,
+        'grupo_sede_id': grupo.sede_id,
         'asignacion': asignacion.to_dict()
     }), 201
 
@@ -256,7 +266,16 @@ def update_asignacion(asignacion_id):
 
     if 'activo' in data:
         asignacion.activo = data['activo']
-    
+
+    # Dominio: el par final profesor/grupo debe seguir en la misma sede.
+    final_profesor = db.session.get(Profesor, asignacion.profesor_id)
+    final_grupo = db.session.get(Grupo, asignacion.grupo_id)
+    try:
+        validate_same_sede(final_profesor, final_grupo)
+    except SameSedeError:
+        db.session.rollback()
+        return forbidden_uniform()
+
     try:
         db.session.commit()
     except Exception as e:
@@ -327,10 +346,19 @@ def get_asignaciones_actuales_profesor(profesor_id):
     
     profesor = Profesor.query.get_or_404(profesor_id)
     today = date.today()
-    
+
+    # Alcance: un profesor solo ve sus propias asignaciones; el listado nunca
+    # amplía por join: solo filas cuya sede coincide con profesor.sede_id.
+    claims = get_jwt()
+    claims_uid = claims.get('id')
+    claims_utype = claims.get('type') or claims.get('user_type')
+    if claims_utype == 'profesor' and str(claims_uid) != str(profesor_id):
+        return forbidden_uniform()
+
     # Asignaciones donde hoy está dentro del período
-    asignaciones = Asignacion.query.filter(
+    asignaciones = Asignacion.query.join(Grupo, Asignacion.grupo_id == Grupo.id).filter(
         Asignacion.profesor_id == profesor_id,
+        Grupo.sede_id == profesor.sede_id,
         Asignacion.activo == True,
         Asignacion.fecha_inicio <= today,
         Asignacion.fecha_fin >= today
