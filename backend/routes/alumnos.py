@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
 
 from models import db, Alumno, Carrera, Materia, Calificacion, Sede
-from utils.decorators import admin_required, get_admin_or_403, general_admin_required
+from utils.decorators import admin_required, get_admin_or_403, general_admin_required, require_sede
 from utils.scope import scope_by_sede
 from extensions import limiter
 from utils.mail import send_credentials_email
@@ -23,6 +23,7 @@ alumnos_bp = Blueprint('alumnos', __name__)
 
 @alumnos_bp.route('', methods=['GET'])
 @admin_required
+@require_sede
 def list_alumnos():
     """
     Lista todos los alumnos (admin)
@@ -83,6 +84,7 @@ def list_alumnos():
 
 @alumnos_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_alumno():
     """
     Crea un nuevo alumno (admin)
@@ -185,6 +187,7 @@ def create_alumno():
 
 @alumnos_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno(id):
     """
     Obtiene un alumno por ID (admin o el propio alumno) — scoped by sede for admins.
@@ -208,6 +211,7 @@ def get_alumno(id):
 
 @alumnos_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_alumno(id):
     """
     Actualiza un alumno (admin) — scoped by sede.
@@ -292,6 +296,7 @@ def update_alumno(id):
 
 @alumnos_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_alumno(id):
     """
     Elimina un alumno (admin) — scoped by sede.
@@ -324,6 +329,7 @@ def delete_alumno(id):
 
 @alumnos_bp.route('/mis-datos', methods=['GET'])
 @jwt_required()
+@require_sede
 def mis_datos():
     """
     Obtiene los datos del alumno logueado (alumno only)
@@ -367,6 +373,7 @@ def _generate_temp_password() -> str:
 @alumnos_bp.route('/send-credentials', methods=['POST'])
 @admin_required
 @limiter.limit("20/minute")
+@require_sede
 def send_credentials():
     """
     POST /api/alumnos/send-credentials
@@ -476,6 +483,7 @@ def send_credentials():
 
 @alumnos_bp.route('/<int:id>/sede', methods=['PATCH'])
 @general_admin_required
+@require_sede
 def transfer_sede(id):
     """Transfer alumno to another sede — general_admin only."""
     alumno = Alumno.query.get_or_404(id)
@@ -501,6 +509,7 @@ def transfer_sede(id):
 
 @alumnos_bp.route('/stats', methods=['GET'])
 @admin_required
+@require_sede
 def get_stats():
     """
     Estadísticas generales de alumnos (admin)

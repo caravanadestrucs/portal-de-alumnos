@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import or_ as sa_or
 
 from models import db, WikiPage, WikiRevision, WikiAttachment, Sede
-from utils.decorators import sede_scoped_admin_required
+from utils.decorators import sede_scoped_admin_required, require_sede
 from utils.scope import scope_wiki
 
 wiki_bp = Blueprint('wiki', __name__)
@@ -138,6 +138,7 @@ def _check_page_write_access(page: WikiPage, claims):
 @wiki_bp.route('/pages', methods=['POST'])
 @wiki_bp.route('/pages/', methods=['POST'])
 @jwt_required()
+@require_sede
 def create_page():
     claims = get_jwt()
     data = request.get_json(silent=True)
@@ -223,6 +224,7 @@ def create_page():
 @wiki_bp.route('/pages', methods=['GET'])
 @wiki_bp.route('/pages/', methods=['GET'])
 @jwt_required()
+@require_sede
 def list_pages():
     claims = get_jwt()
     # base query scoped
@@ -275,6 +277,7 @@ def list_pages():
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_page(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -290,6 +293,7 @@ def get_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['PUT'])
 @jwt_required()
+@require_sede
 def update_page(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -337,6 +341,7 @@ def update_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['DELETE'])
 @jwt_required()
+@require_sede
 def delete_page(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -367,6 +372,7 @@ def delete_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/history', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_history(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -420,6 +426,7 @@ def _is_allowed_mime(mime: str) -> bool:
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/attachments', methods=['POST'])
 @jwt_required()
+@require_sede
 def upload_attachment(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -508,6 +515,7 @@ def upload_attachment(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/attachments', methods=['GET'])
 @jwt_required()
+@require_sede
 def list_attachments(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -524,6 +532,7 @@ def list_attachments(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/attachments/<int:attachment_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def download_attachment(attachment_id):
     att = db.session.get(WikiAttachment, attachment_id)
     if not att:

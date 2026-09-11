@@ -5,7 +5,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Admin, Sede
-from utils.decorators import admin_required, general_admin_required
+from utils.decorators import admin_required, general_admin_required, require_sede, global_route, forbidden_uniform
+from utils.scope import scope_by_sede
 from utils.security import validate_email
 
 admins_bp = Blueprint('admins', __name__)
@@ -13,6 +14,7 @@ admins_bp = Blueprint('admins', __name__)
 
 @admins_bp.route('/', methods=['GET'])
 @admin_required
+@require_sede
 def list_admins():
     """
     Lista todos los administradores
@@ -25,8 +27,8 @@ def list_admins():
         per_page = max(1, min(int(request.args.get('per_page', 20)), 100))
     except:
         per_page = 20
-    
-    pagination = Admin.query.paginate(page=page, per_page=per_page, error_out=False)
+
+    pagination = scope_by_sede(Admin.query, Admin.sede_id).paginate(page=page, per_page=per_page, error_out=False)
     
     return jsonify({
         'admins': [a.to_dict() for a in pagination.items],
@@ -39,6 +41,7 @@ def list_admins():
 
 @admins_bp.route('/', methods=['POST'])
 @general_admin_required
+@global_route
 def create_admin():
     """
     Crea un nuevo administrador — general_admin only, verifies sede.
@@ -118,25 +121,35 @@ def create_admin():
 
 @admins_bp.route('/<int:admin_id>', methods=['GET'])
 @admin_required
+@require_sede
 def get_admin(admin_id):
     """
     Obtiene un administrador por ID
     """
+    claims = get_jwt()
     admin = db.session.get(Admin, admin_id)
+    # Anti-enumeración: sin scope válido no distinguir no-existe vs otra sede.
+    if claims.get('role') == 'sede_admin' and (admin is None or admin.sede_id != claims.get('sede_id')):
+        return forbidden_uniform()
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
-    
+
     return jsonify({'admin': admin.to_dict()}), 200
 
 
 @admins_bp.route('/<int:admin_id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_admin(admin_id):
     """
     Actualiza un administrador
     Body: { username?, email?, nombre? }
     """
+    claims = get_jwt()
     admin = db.session.get(Admin, admin_id)
+    # Anti-enumeración: sin scope válido no distinguir no-existe vs otra sede.
+    if claims.get('role') == 'sede_admin' and (admin is None or admin.sede_id != claims.get('sede_id')):
+        return forbidden_uniform()
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     
@@ -178,6 +191,7 @@ def update_admin(admin_id):
 
 @admins_bp.route('/<int:admin_id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_admin(admin_id):
     """
     Elimina un administrador (no permite auto-eliminación)
@@ -190,6 +204,9 @@ def delete_admin(admin_id):
         return jsonify({'error': 'No puedes eliminar tu propia cuenta'}), 403
     
     admin = db.session.get(Admin, admin_id)
+    # Anti-enumeración: sin scope válido no distinguir no-existe vs otra sede.
+    if claims.get('role') == 'sede_admin' and (admin is None or admin.sede_id != claims.get('sede_id')):
+        return forbidden_uniform()
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     
@@ -213,6 +230,7 @@ def delete_admin(admin_id):
 
 @admins_bp.route('/<int:admin_id>/change-password', methods=['POST'])
 @admin_required
+@require_sede
 def change_admin_password(admin_id):
     """
     Cambia la contraseña de un administrador
@@ -228,6 +246,9 @@ def change_admin_password(admin_id):
         pass
     
     admin = db.session.get(Admin, admin_id)
+    # Anti-enumeración: sin scope válido no distinguir no-existe vs otra sede.
+    if claims.get('role') == 'sede_admin' and (admin is None or admin.sede_id != claims.get('sede_id')):
+        return forbidden_uniform()
     if not admin:
         return jsonify({'error': 'Administrador no encontrado'}), 404
     

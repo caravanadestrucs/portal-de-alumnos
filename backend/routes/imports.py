@@ -14,7 +14,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt
 
 from models import db, Alumno, Carrera, Materia, Calificacion, NotaRemision, Sede
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 
 imports_bp = Blueprint('imports', __name__)
 
@@ -1148,6 +1148,7 @@ def _parse_materias(headers, rows):
 
 @imports_bp.route('/preview', methods=['POST'])
 @admin_required
+@require_sede
 def preview_import():
     """
     Previsualiza un archivo de importación.
@@ -1288,6 +1289,7 @@ def preview_import():
 
 @imports_bp.route('/execute', methods=['POST'])
 @admin_required
+@require_sede
 def execute_import():
     """
     Ejecuta la importación completa.

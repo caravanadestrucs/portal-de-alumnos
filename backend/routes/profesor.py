@@ -6,12 +6,14 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, date
 
 from models import db, Asignacion, GrupoIntegrante, Calificacion
+from utils.decorators import require_sede
 
 profesor_bp = Blueprint('profesor', __name__)
 
 
 @profesor_bp.route('/mis-asignaciones', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_mis_asignaciones():
     """Obtiene las asignaciones del profesor actual"""
     claims = get_jwt()
@@ -37,6 +39,7 @@ def get_mis_asignaciones():
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_calificaciones_asignacion(asignacion_id):
     """Obtiene las calificaciones de los alumnos de una asignacion"""
     claims = get_jwt()
@@ -99,6 +102,7 @@ def get_calificaciones_asignacion(asignacion_id):
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['PUT'])
 @jwt_required()
+@require_sede
 def update_calificaciones(asignacion_id):
     """Actualiza las calificaciones de los alumnos de una asignacion"""
     claims = get_jwt()

@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Alumno, Calificacion, Materia, Asignacion, GrupoIntegrante
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 
 calificaciones_bp = Blueprint('calificaciones', __name__)
 
@@ -35,6 +35,7 @@ def _alumno_sede_forbidden(alumno):
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno_calificaciones(alumno_id):
     """
     Obtiene todas las calificaciones de un alumno — scoped via alumno.sede_id
@@ -97,6 +98,7 @@ def get_alumno_calificaciones(alumno_id):
 
 @calificaciones_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_or_update_calificacion():
     """
     Crea o actualiza una calificación (admin)
@@ -197,6 +199,7 @@ def create_or_update_calificacion():
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>/historial', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_historial(alumno_id):
     """
     Obtiene el historial completo del alumno (para el portal) — scoped
@@ -251,6 +254,7 @@ def get_historial(alumno_id):
 
 @calificaciones_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_calificacion(id):
     """
     Obtiene una calificación por ID — scoped
@@ -270,6 +274,7 @@ def get_calificacion(id):
 
 @calificaciones_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_calificacion(id):
     """
     Actualiza una calificación por ID (admin) — scoped via alumno
@@ -325,6 +330,7 @@ def update_calificacion(id):
 
 @calificaciones_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_calificacion(id):
     """
     Elimina una calificación (admin) — scoped via alumno
@@ -347,6 +353,7 @@ def delete_calificacion(id):
 
 @calificaciones_bp.route('/periodos', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_periodos():
     """
     Obtiene todos los periodos/años únicos en las calificaciones
@@ -375,6 +382,7 @@ def get_periodos():
 
 @calificaciones_bp.route('/bulk', methods=['POST', 'PUT'])
 @admin_required
+@require_sede
 def bulk_create_calificaciones():
     """
     Crea múltiples calificaciones a la vez (admin)

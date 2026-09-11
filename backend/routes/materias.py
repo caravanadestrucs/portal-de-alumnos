@@ -5,12 +5,13 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
 from models import db, Materia, Carrera, Alumno, Calificacion
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede, public_route
 
 materias_bp = Blueprint('materias', __name__)
 
 
 @materias_bp.route('', methods=['GET'])
+@public_route
 def list_materias():
     """
     Lista todas las materias
@@ -52,6 +53,7 @@ def list_materias():
 
 @materias_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_materia():
     """
     Crea una nueva materia (admin)
@@ -145,6 +147,7 @@ def create_materia():
 
 
 @materias_bp.route('/<int:id>', methods=['GET'])
+@public_route
 def get_materia(id):
     """
     Obtiene una materia por ID
@@ -155,6 +158,7 @@ def get_materia(id):
 
 @materias_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_materia(id):
     """
     Actualiza una materia (admin)
@@ -200,6 +204,7 @@ def update_materia(id):
 
 @materias_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_materia(id):
     """
     Elimina una materia (admin)
@@ -226,6 +231,7 @@ def delete_materia(id):
 
 
 @materias_bp.route('/by-carrera/<int:carrera_id>', methods=['GET'])
+@public_route
 def get_materias_by_carrera(carrera_id):
     """
     Obtiene todas las materias de una carrera

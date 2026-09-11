@@ -4,13 +4,15 @@ Rutas para gestión de Carreras
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
-from models import db, Carrera, Materia
-from utils.decorators import admin_required
+from models import db, Carrera, Materia, Alumno
+from utils.decorators import admin_required, require_sede, public_route
+from utils.scope import scope_by_sede
 
 carreras_bp = Blueprint('carreras', __name__)
 
 
 @carreras_bp.route('', methods=['GET'])
+@public_route
 def list_carreras():
     """
     Lista todas las carreras
@@ -33,6 +35,7 @@ def list_carreras():
 
 @carreras_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_carrera():
     """
     Crea una nueva carrera (admin)
@@ -75,6 +78,7 @@ def create_carrera():
 
 
 @carreras_bp.route('/<int:id>', methods=['GET'])
+@public_route
 def get_carrera(id):
     """
     Obtiene una carrera por ID
@@ -85,6 +89,7 @@ def get_carrera(id):
 
 @carreras_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_carrera(id):
     """
     Actualiza una carrera (admin)
@@ -123,6 +128,7 @@ def update_carrera(id):
 
 @carreras_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_carrera(id):
     """
     Elimina una carrera (admin)
@@ -154,6 +160,7 @@ def delete_carrera(id):
 
 
 @carreras_bp.route('/<int:id>/materias', methods=['GET'])
+@public_route
 def get_carrera_materias(id):
     """
     Obtiene las materias de una carrera
@@ -169,6 +176,7 @@ def get_carrera_materias(id):
 
 @carreras_bp.route('/<int:id>/alumnos', methods=['GET'])
 @admin_required
+@require_sede
 def get_carrera_alumnos(id):
     """
     Obtiene los alumnos de una carrera
@@ -182,7 +190,7 @@ def get_carrera_alumnos(id):
     except:
         per_page = 20
     
-    pagination = carrera.alumnos.order_by(
+    pagination = scope_by_sede(carrera.alumnos, Alumno.sede_id).order_by(
         db.text('apellido_paterno'), db.text('nombre')
     ).paginate(page=page, per_page=per_page, error_out=False)
     

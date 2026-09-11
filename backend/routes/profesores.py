@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Profesor, Sede
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 from utils.scope import scope_by_sede
 
 profesores_bp = Blueprint('profesores', __name__)
@@ -13,6 +13,7 @@ profesores_bp = Blueprint('profesores', __name__)
 
 @profesores_bp.route('', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_profesores():
     """
     Obtiene todos los profesores
@@ -53,6 +54,7 @@ def _prof_sede_forbidden(prof):
 
 @profesores_bp.route('/<int:profesor_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_profesor(profesor_id):
     """
     Obtiene un profesor por ID — scoped
@@ -65,6 +67,7 @@ def get_profesor(profesor_id):
 
 @profesores_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_profesor():
     """
     Crea un nuevo profesor
@@ -133,6 +136,7 @@ def create_profesor():
 
 @profesores_bp.route('/<int:profesor_id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_profesor(profesor_id):
     """
     Actualiza un profesor — scoped
@@ -185,6 +189,7 @@ def update_profesor(profesor_id):
 
 @profesores_bp.route('/<int:profesor_id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_profesor(profesor_id):
     """
     Elimina o desactiva un profesor — scoped

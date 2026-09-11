@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, NotaRemision, Alumno, Admin
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 
 pagos_bp = Blueprint('pagos', __name__)
 
@@ -20,6 +20,7 @@ def _pago_alumno_forbidden(alumno):
 
 @pagos_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno_pagos(alumno_id):
     """
     Obtiene todas las notas de remisión de un alumno — scoped
@@ -62,6 +63,7 @@ def get_alumno_pagos(alumno_id):
 
 @pagos_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_nota():
     """
     Crea una nueva nota de remisión (admin)
@@ -125,6 +127,7 @@ def create_nota():
 
 @pagos_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_nota(id):
     """
     Actualiza una nota de remisión (admin) — scoped
@@ -170,6 +173,7 @@ def update_nota(id):
 
 @pagos_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_nota(id):
     """
     Obtiene una nota por ID — scoped
@@ -189,6 +193,7 @@ def get_nota(id):
 
 @pagos_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_nota(id):
     """
     Elimina una nota de remisión (admin) — scoped
@@ -211,6 +216,7 @@ def delete_nota(id):
 
 @pagos_bp.route('/toggle-pagado/<int:id>', methods=['PATCH'])
 @admin_required
+@require_sede
 def toggle_pagado(id):
     """
     Cambia el estado de pagado/no pagado de una nota (admin) — scoped
@@ -245,6 +251,7 @@ def toggle_pagado(id):
 
 @pagos_bp.route('/marcar-pagado/<int:id>', methods=['PATCH'])
 @admin_required
+@require_sede
 def marcar_pagado(id):
     """
     Marca una nota como pagada con fecha específica (admin) — scoped
@@ -277,6 +284,7 @@ def marcar_pagado(id):
 
 @pagos_bp.route('/resumen-general', methods=['GET'])
 @admin_required
+@require_sede
 def get_resumen_general():
     """
     Resumen general de todas las notas (admin)
@@ -311,6 +319,7 @@ def get_resumen_general():
 
 @pagos_bp.route('/todas', methods=['GET'])
 @admin_required
+@require_sede
 def get_all_notas():
     """
     Lista todas las notas con filtros (admin)
@@ -361,6 +370,7 @@ def get_all_notas():
 
 @pagos_bp.route('/alumnos-pendientes', methods=['GET'])
 @admin_required
+@require_sede
 def get_alumnos_pendientes():
     """
     Lista alumnos con pagos pendientes y su total

@@ -28,3 +28,17 @@ def test_require_sede_denies_cross_sede_uniform_403():
             assert body["code"] == "CROSS_SEDE"
             assert "hua" not in str(body).lower() and "teotitlan" not in str(body).lower()
         db.session.remove(); db.drop_all()
+
+
+def test_registry_19_of_19_have_scope_marker():
+    import pathlib
+    routes_dir = pathlib.Path(__file__).resolve().parents[1] / "routes"
+    missing = []
+    for f in sorted(routes_dir.glob("*.py")):
+        if f.name == "__init__.py":
+            continue
+        text = f.read_text(encoding="utf-8")
+        if "@require_sede" not in text and "@public_route" not in text and "@global_route" not in text:
+            missing.append(f.name)
+    assert missing == [], f"routes without scope marker: {missing}"
+    assert len(list(routes_dir.glob("*.py"))) - 1 == 19

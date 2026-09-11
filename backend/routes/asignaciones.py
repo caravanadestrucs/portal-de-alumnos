@@ -7,13 +7,14 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, Asignacion, Profesor, Materia, Grupo, Periodo
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 
 asignaciones_bp = Blueprint('asignaciones', __name__)
 
 
 @asignaciones_bp.route('', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignaciones():
     """
     Obtiene todas las asignaciones
@@ -84,6 +85,7 @@ def _asig_forbidden(asignacion):
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignacion(asignacion_id):
     """
     Obtiene una asignacion por ID — scoped
@@ -97,6 +99,7 @@ def get_asignacion(asignacion_id):
 @asignaciones_bp.route('', methods=['POST'])
 @jwt_required()
 @admin_required
+@require_sede
 def create_asignacion():
     """
     Crea una nueva asignacion
@@ -191,6 +194,7 @@ def create_asignacion():
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['PUT'])
 @jwt_required()
 @admin_required
+@require_sede
 def update_asignacion(asignacion_id):
     """
     Actualiza una asignacion — scoped
@@ -264,6 +268,7 @@ def update_asignacion(asignacion_id):
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
+@require_sede
 def delete_asignacion(asignacion_id):
     """
     Elimina una asignacion — scoped
@@ -289,6 +294,7 @@ def delete_asignacion(asignacion_id):
 
 @asignaciones_bp.route('/<int:asignacion_id>/puede-editar', methods=['GET'])
 @jwt_required()
+@require_sede
 def puede_editar(asignacion_id):
     """
     Verifica si actualmente se puede editar calificaciones para esta asignacion
@@ -306,6 +312,7 @@ def puede_editar(asignacion_id):
 
 @asignaciones_bp.route('/profesor/<int:profesor_id>/actuales', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignaciones_actuales_profesor(profesor_id):
     """
     Obtiene las asignaciones actuales de un profesor

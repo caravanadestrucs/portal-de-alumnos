@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt
 
 from models import db, Config
-from utils.decorators import admin_required
+from utils.decorators import admin_required, global_route
 from utils.email import send_email
 from utils.security import validate_email
 from extensions import limiter
@@ -54,6 +54,7 @@ def _validate_smtp_fields(data: dict) -> str | None:
 
 @settings_bp.route('', methods=['GET'])
 @admin_required
+@global_route
 def get_config():
     """
     GET /api/config
@@ -75,6 +76,7 @@ def get_config():
 @settings_bp.route('', methods=['PUT'])
 @limiter.limit("30/hour")
 @admin_required
+@global_route
 def update_config():
     """
     PUT /api/config
@@ -136,6 +138,7 @@ def update_config():
 @settings_bp.route('/test', methods=['POST'])
 @limiter.limit("10/hour")
 @admin_required
+@global_route
 def test_email():
     """
     POST /api/config/test

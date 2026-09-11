@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
 from models import db, Periodo
-from utils.decorators import admin_required
+from utils.decorators import admin_required, global_route
 
 periodos_bp = Blueprint('periodos', __name__)
 
@@ -37,6 +37,7 @@ def _parse_activa(value):
 
 @periodos_bp.route('', methods=['GET'])
 @jwt_required()
+@global_route
 def listar_periodos():
     periodos = Periodo.query.order_by(Periodo.nombre.asc()).all()
     return jsonify({'periodos': [p.to_dict() for p in periodos]}), 200
@@ -45,6 +46,7 @@ def listar_periodos():
 @periodos_bp.route('', methods=['POST'])
 @jwt_required()
 @admin_required
+@global_route
 def crear_periodo():
     data = request.get_json(silent=True)
     if data is None:
@@ -70,6 +72,7 @@ def crear_periodo():
 @periodos_bp.route('/<int:periodo_id>', methods=['PUT'])
 @jwt_required()
 @admin_required
+@global_route
 def actualizar_periodo(periodo_id):
     periodo = Periodo.query.get_or_404(periodo_id)
     data = request.get_json(silent=True)
@@ -102,6 +105,7 @@ def actualizar_periodo(periodo_id):
 @periodos_bp.route('/<int:periodo_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
+@global_route
 def eliminar_periodo(periodo_id):
     periodo = Periodo.query.get_or_404(periodo_id)
     periodo.activa = False

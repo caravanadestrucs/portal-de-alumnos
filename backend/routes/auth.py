@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config, Sede
 from utils.security import generate_tokens, validate_email, validate_numero_control, generate_reset_token, verify_reset_token
-from utils.decorators import admin_required, alumno_required
+from utils.decorators import admin_required, alumno_required, public_route, global_route
 from utils.email import send_email, render_reset_email
 from extensions import limiter
 
@@ -57,6 +57,7 @@ def _find_user_by_email(email: str) -> tuple:
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 @limiter.limit("10/minute")
+@public_route
 def login():
     """
     Inicio de sesión para admin o alumno
@@ -174,6 +175,7 @@ def login():
 
 @auth_bp.route('/register', methods=['POST'])
 @limiter.limit("5 per hour")
+@public_route
 def register():
     """
     Registro de nuevo alumno via link oculto /r/a/:token
@@ -278,6 +280,7 @@ def register():
 
 @auth_bp.route('/register/profesor', methods=['POST'])
 @limiter.limit("5 per hour")
+@public_route
 def register_profesor():
     """
     Registro de nuevo profesor via link oculto /r/p/:token
@@ -379,6 +382,7 @@ def register_profesor():
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
+@global_route
 def logout():
     """
     Cerrar sesión (el token se invalida desde el cliente)
@@ -390,6 +394,7 @@ def logout():
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
+@global_route
 def get_current_user():
     """
     Obtiene la información del usuario actual
@@ -430,6 +435,7 @@ def get_current_user():
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
+@global_route
 def refresh_token():
     """
     Refresca el token de acceso usando el refresh token
@@ -452,6 +458,7 @@ def refresh_token():
 
 @auth_bp.route('/change-password', methods=['POST'])
 @jwt_required()
+@global_route
 def change_password():
     """
     Cambiar contraseña del usuario actual
@@ -506,6 +513,7 @@ def change_password():
 
 @auth_bp.route('/forgot-password', methods=['POST'])
 @limiter.limit("5/hour")
+@public_route
 def forgot_password():
     """
     POST /api/auth/forgot-password
@@ -572,6 +580,7 @@ def forgot_password():
 
 @auth_bp.route('/reset-password', methods=['POST'])
 @limiter.limit("10/hour")
+@public_route
 def reset_password():
     """
     POST /api/auth/reset-password

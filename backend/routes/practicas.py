@@ -6,13 +6,14 @@ from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 from models import db, PracticaProfesional, Alumno
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 
 practicas_bp = Blueprint('practicas', __name__)
 
 
 @practicas_bp.route('', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_all():
     """Obtiene todas las prácticas profesionales"""
     practicas = PracticaProfesional.query.order_by(PracticaProfesional.alumno_id, PracticaProfesional.numero_practica).all()
@@ -21,6 +22,7 @@ def get_all():
 
 @practicas_bp.route('/alumno/<int:alumno_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_by_alumno(alumno_id):
     """Obtiene las prácticas de un alumno"""
     practicas = PracticaProfesional.query.filter_by(alumno_id=alumno_id).all()
@@ -32,6 +34,7 @@ def get_by_alumno(alumno_id):
 
 @practicas_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create():
     """Crea una nueva práctica profesional"""
     data = request.get_json()
@@ -95,6 +98,7 @@ def create():
 
 @practicas_bp.route('/<int:practica_id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update(practica_id):
     """Actualiza una práctica profesional"""
     practica = PracticaProfesional.query.get_or_404(practica_id)
@@ -136,6 +140,7 @@ def update(practica_id):
 
 @practicas_bp.route('/<int:practica_id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete(practica_id):
     """Elimina una práctica profesional"""
     practica = PracticaProfesional.query.get_or_404(practica_id)

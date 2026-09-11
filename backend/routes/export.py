@@ -9,7 +9,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from sqlalchemy import text
 
 from models import db, Admin, Alumno, Carrera, Materia, Calificacion, NotaRemision, PracticaProfesional
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 from utils.scope import scope_by_sede
 
 export_bp = Blueprint('export', __name__)
@@ -17,6 +17,7 @@ export_bp = Blueprint('export', __name__)
 
 @export_bp.route('/sql', methods=['GET'])
 @admin_required
+@require_sede
 def export_sql():
     """
     Genera un dump SQL completo de todas las tablas
@@ -289,6 +290,7 @@ def export_sql():
 
 @export_bp.route('/excel', methods=['GET'])
 @admin_required
+@require_sede
 def export_excel():
     """
     Genera un archivo Excel con todos los datos
@@ -426,6 +428,7 @@ def export_excel():
 
 @export_bp.route('/json', methods=['GET'])
 @admin_required
+@require_sede
 def export_json():
     """
     Genera un archivo JSON con todos los datos — scoped by sede for sede_admin

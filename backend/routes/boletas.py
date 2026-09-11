@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, GrupoIntegrante
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede
 from utils.scope import scope_by_sede
 
 boletas_bp = Blueprint('boletas', __name__)
@@ -35,6 +35,7 @@ def _alcance_periodo(periodo_id):
 @boletas_bp.route('/alumnos', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def listar_alumnos_boletas():
     carrera_id = request.args.get('carrera_id', type=int)
     grupo_id = request.args.get('grupo_id', type=int)
@@ -113,6 +114,7 @@ def _boleta_forbidden(alumno):
 @boletas_bp.route('/download/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def descargar_boleta(alumno_id):
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
@@ -168,6 +170,7 @@ def descargar_boleta(alumno_id):
 @boletas_bp.route('/download-multiple', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def descargar_boletas_multiples():
     alumno_ids_str = request.args.get('alumno_ids', '')
     if not alumno_ids_str:
@@ -230,6 +233,7 @@ def descargar_boletas_multiples():
 @boletas_bp.route('/preview/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def vista_previa_boleta(alumno_id):
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
