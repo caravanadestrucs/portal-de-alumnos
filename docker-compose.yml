@@ -12,6 +12,9 @@ services:
     environment:
       - FLASK_APP=app.py
       - DATABASE_URL=sqlite:////app/instance/portal.db
+      # URL pública del frontend para links en emails (reset de contraseña, credenciales).
+      # Sin esto el backend cae a http://localhost:5173 y los emails apuntan a localhost.
+      - FRONTEND_URL=https://alumnos.felipe-villa-nueva-teotitlan.site
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]

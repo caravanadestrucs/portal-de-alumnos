@@ -1,7 +1,6 @@
 """
 Rutas para gestión de Alumnos
 """
-import os
 import secrets
 import string
 import logging
@@ -400,8 +399,8 @@ def send_credentials():
     except Exception:
         pass
 
-    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:5173")
-    login_url = f"{frontend_url}/login"
+    from utils.frontend import get_frontend_url
+    login_url = f"{get_frontend_url()}/login"
 
     # Sede scoping for bulk: sede_admin can only target own sede
     claims_scope = get_jwt()
