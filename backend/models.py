@@ -287,6 +287,12 @@ class Calificacion(db.Model):
     
     periodo = db.Column(db.String(20))  # ej: "Enero-Abril 2026"
     anio = db.Column(db.Integer)
+    periodo_id = db.Column(db.Integer, db.ForeignKey('periodos.id'), nullable=True)
+
+    # NOTE: named periodo_obj (not periodo) — `periodo` is the legacy string
+    # column and must stay untouched; a relationship named `periodo` would
+    # silently unmap that column (verified empirically 2026-09-08).
+    periodo_obj = db.relationship('Periodo')
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -340,6 +346,8 @@ class Calificacion(db.Model):
             'calificacion_final': self.calificacion_final,
             'periodo': self.periodo,
             'anio': self.anio,
+            'periodo_id': self.periodo_id,
+            'periodo_nombre': self.periodo_obj.nombre if self.periodo_obj else 'Sin periodo',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -465,7 +473,7 @@ class Profesor(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     activo = db.Column(db.Boolean, default=True)
-    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id'), nullable=True, index=True)
+    sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id', name='fk_profesor_sede'), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -563,6 +571,27 @@ class GrupoIntegrante(db.Model):
         }
 
 
+class Periodo(db.Model):
+    """Catálogo de períodos (Enero-Abril 2026, Regular, ...)."""
+    __tablename__ = 'periodos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(120), unique=True, nullable=False)
+    fecha_inicio = db.Column(db.Date, nullable=True)
+    fecha_fin = db.Column(db.Date, nullable=True)
+    activa = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nombre': self.nombre,
+            'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
+            'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
+            'activa': self.activa,
+        }
+
+
 # ============================================================
 # MODELO DE ASIGNACION
 # ============================================================
@@ -574,6 +603,7 @@ class Asignacion(db.Model):
     profesor_id = db.Column(db.Integer, db.ForeignKey('profesores.id', ondelete='CASCADE'), nullable=False)
     materia_id = db.Column(db.Integer, db.ForeignKey('materias.id', ondelete='CASCADE'), nullable=False)
     grupo_id = db.Column(db.Integer, db.ForeignKey('grupos.id', ondelete='CASCADE'), nullable=False)
+    periodo_id = db.Column(db.Integer, db.ForeignKey('periodos.id'), nullable=True)
     
     fecha_inicio = db.Column(db.Date, nullable=False)
     fecha_fin = db.Column(db.Date, nullable=False)
@@ -583,6 +613,7 @@ class Asignacion(db.Model):
     
     # Relaciones
     materia = db.relationship('Materia', backref='asignaciones')
+    periodo = db.relationship('Periodo', backref='asignaciones')
     
     def puede_editar_calificaciones(self):
         """Verifica si actualmente está dentro del período de gestión de calificaciones"""
@@ -599,6 +630,8 @@ class Asignacion(db.Model):
             'materia': self.materia.to_dict() if self.materia else None,
             'grupo_id': self.grupo_id,
             'grupo': self.grupo.to_dict() if self.grupo else None,
+            'periodo_id': self.periodo_id,
+            'periodo_nombre': self.periodo.nombre if self.periodo else 'Sin periodo',
             'fecha_inicio': self.fecha_inicio.isoformat() if self.fecha_inicio else None,
             'fecha_fin': self.fecha_fin.isoformat() if self.fecha_fin else None,
             'puede_editar': self.puede_editar_calificaciones(),
@@ -701,4 +734,21 @@ class WikiAttachment(db.Model):
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+
+# ============================================================
+# MODELO DE AUDITORIA — ?sede_id explícito de general (Slice 1 Task 5)
+# ============================================================
+class AuditLog(db.Model):
+    """Best-effort audit of general acting with an explicit sede target."""
+    __tablename__ = 'audit_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_id = db.Column(db.Integer, nullable=False, index=True)
+    actor_role = db.Column(db.String(30), nullable=False)
+    method = db.Column(db.String(10), nullable=False)
+    path = db.Column(db.String(300), nullable=False)
+    target_sede_id = db.Column(db.Integer, db.ForeignKey('sedes.id', name='fk_audit_sede'), nullable=True, index=True)
+    resource_ids = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 

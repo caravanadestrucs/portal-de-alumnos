@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
 
 from models import db, Alumno, Carrera, Materia, Calificacion, Sede
-from utils.decorators import admin_required, get_admin_or_403, general_admin_required
+from utils.decorators import admin_required, get_admin_or_403, general_admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 from extensions import limiter
 from utils.mail import send_credentials_email
@@ -22,6 +22,7 @@ alumnos_bp = Blueprint('alumnos', __name__)
 
 @alumnos_bp.route('', methods=['GET'])
 @admin_required
+@require_sede
 def list_alumnos():
     """
     Lista todos los alumnos (admin)
@@ -82,6 +83,7 @@ def list_alumnos():
 
 @alumnos_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_alumno():
     """
     Crea un nuevo alumno (admin)
@@ -184,29 +186,35 @@ def create_alumno():
 
 @alumnos_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno(id):
     """
     Obtiene un alumno por ID (admin o el propio alumno) — scoped by sede for admins.
     """
     claims = get_jwt()
-    alumno = Alumno.query.get_or_404(id)
+    # Self-access check first: non-self alumno ids always 403 (no existence leak).
+    if claims.get('type') == 'alumno' and claims['id'] != id:
+        return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
+    alumno = db.session.get(Alumno, id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
 
     # Admin sede scoping: sede_admin can only view own sede
     if (claims.get('user_type') or claims.get('type')) == 'admin':
         role = claims.get('role')
         token_sede = claims.get('sede_id')
         if role == 'sede_admin' and alumno.sede_id != token_sede:
-            return jsonify({'error': 'Cross-sede access forbidden', 'code': 'CROSS_SEDE'}), 403
-    
-    # Verificar permisos: solo el admin o el propio alumno pueden ver
-    if claims.get('type') == 'alumno' and claims['id'] != id:
-        return jsonify({'error': 'No tienes permiso para ver este alumno'}), 403
+            return forbidden_uniform()
     
     return jsonify({'alumno': alumno.to_dict()}), 200
 
 
 @alumnos_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_alumno(id):
     """
     Actualiza un alumno (admin) — scoped by sede.
@@ -291,6 +299,7 @@ def update_alumno(id):
 
 @alumnos_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_alumno(id):
     """
     Elimina un alumno (admin) — scoped by sede.
@@ -323,6 +332,7 @@ def delete_alumno(id):
 
 @alumnos_bp.route('/mis-datos', methods=['GET'])
 @jwt_required()
+@require_sede
 def mis_datos():
     """
     Obtiene los datos del alumno logueado (alumno only)
@@ -366,6 +376,7 @@ def _generate_temp_password() -> str:
 @alumnos_bp.route('/send-credentials', methods=['POST'])
 @admin_required
 @limiter.limit("20/minute")
+@require_sede
 def send_credentials():
     """
     POST /api/alumnos/send-credentials
@@ -475,6 +486,7 @@ def send_credentials():
 
 @alumnos_bp.route('/<int:id>/sede', methods=['PATCH'])
 @general_admin_required
+@require_sede
 def transfer_sede(id):
     """Transfer alumno to another sede — general_admin only."""
     alumno = Alumno.query.get_or_404(id)
@@ -500,6 +512,7 @@ def transfer_sede(id):
 
 @alumnos_bp.route('/stats', methods=['GET'])
 @admin_required
+@require_sede
 def get_stats():
     """
     Estadísticas generales de alumnos (admin)

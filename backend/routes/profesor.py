@@ -6,12 +6,14 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime, date
 
 from models import db, Asignacion, GrupoIntegrante, Calificacion
+from utils.decorators import require_sede, forbidden_uniform, uniform_missing_response
 
 profesor_bp = Blueprint('profesor', __name__)
 
 
 @profesor_bp.route('/mis-asignaciones', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_mis_asignaciones():
     """Obtiene las asignaciones del profesor actual"""
     claims = get_jwt()
@@ -37,17 +39,23 @@ def get_mis_asignaciones():
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_calificaciones_asignacion(asignacion_id):
     """Obtiene las calificaciones de los alumnos de una asignacion"""
     claims = get_jwt()
     user_type = claims.get('type')
     user_id = claims.get('id')
     
-    asignacion = Asignacion.query.get_or_404(asignacion_id)
+    asignacion = db.session.get(Asignacion, asignacion_id)
+    if asignacion is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Asignacion no encontrada'}), 404
     
     # Solo el profesor asignado o un admin pueden ver
     if user_type != 'admin' and (user_type != 'profesor' or user_id != asignacion.profesor_id):
-        return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
+        return forbidden_uniform()
     
     integrantes = GrupoIntegrante.query.filter_by(
         grupo_id=asignacion.grupo_id
@@ -71,7 +79,8 @@ def get_calificaciones_asignacion(asignacion_id):
                 alumno_id=integ.alumno_id,
                 materia_id=asignacion.materia_id,
                 periodo=f"Enero-Abril {datetime.now().year}",
-                anio=datetime.now().year
+                anio=datetime.now().year,
+                periodo_id=asignacion.periodo_id,
             )
             db.session.add(calif)
             db.session.flush()
@@ -98,6 +107,7 @@ def get_calificaciones_asignacion(asignacion_id):
 
 @profesor_bp.route('/asignacion/<int:asignacion_id>/calificaciones', methods=['PUT'])
 @jwt_required()
+@require_sede
 def update_calificaciones(asignacion_id):
     """Actualiza las calificaciones de los alumnos de una asignacion"""
     claims = get_jwt()
@@ -147,6 +157,7 @@ def update_calificaciones(asignacion_id):
             else:
                 setattr(calif, campo, max(0, min(10, float(valor))))
     
+    calif.periodo_id = asignacion.periodo_id
     try:
         db.session.commit()
     except Exception as e:

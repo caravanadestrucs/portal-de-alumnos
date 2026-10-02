@@ -6,7 +6,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token, decode
 import json
 
 
-def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None, role: str = None, sede_id: int = None):
+def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None, role: str = None, sede_id: int = None, sede_slug: str = None):
     """
     Genera access y refresh tokens para un usuario
 
@@ -16,6 +16,7 @@ def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None, rol
         extra_claims: Claims adicionales opcionales
         role: admin role ('general_admin'|'sede_admin') — embedded as claim
         sede_id: sede FK — embedded as claim (None for general_admin)
+        sede_slug: sede codigo ('TEO'/'HUA') — display claim (None for general_admin)
 
     Returns:
         dict con access_token y refresh_token
@@ -34,11 +35,15 @@ def generate_tokens(user_id: int, user_type: str, extra_claims: dict = None, rol
         base_claims['sede_id'] = sede_id
     elif role == 'general_admin':
         base_claims['sede_id'] = None
+    if sede_slug is not None:
+        base_claims['sede_slug'] = sede_slug
+    elif role in ('general_admin', 'general'):
+        base_claims['sede_slug'] = None
     if extra_claims:
         for k, v in extra_claims.items():
             if k not in base_claims:
                 base_claims[k] = v
-            elif k in ('role', 'sede_id') and base_claims.get(k) is None:
+            elif k in ('role', 'sede_id', 'sede_slug') and base_claims.get(k) is None:
                 base_claims[k] = v
 
     # Access token can safely overwrite `type` (user type) — access check is lenient

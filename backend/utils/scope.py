@@ -1,7 +1,7 @@
 """
 scope helpers for sede multitenancy
 """
-from flask import request
+from flask import request, g as _scope_g
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
 from sqlalchemy import or_ as sa_or, false as sa_false
 from models import db
@@ -23,6 +23,13 @@ def scope_by_sede(query, column):
 
     role = claims.get("role")
     sede_id = claims.get("sede_id")
+
+    try:
+        injected = getattr(_scope_g, 'scoped_sede_id', 'MISS')
+        if injected != 'MISS' and role == 'sede_admin' and injected is not None:
+            return query.filter(column == injected)
+    except Exception:
+        pass
 
     # sede_admin is strictly scoped
     if role == "sede_admin":

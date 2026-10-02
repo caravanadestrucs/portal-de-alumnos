@@ -9,8 +9,8 @@ from zipfile import ZipFile
 from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Alumno, Calificacion, Materia, Carrera
-from utils.decorators import admin_required
+from models import db, Alumno, Calificacion, Materia, Carrera, Periodo, GrupoIntegrante
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 
 boletas_bp = Blueprint('boletas', __name__)
@@ -20,9 +20,22 @@ boletas_bp = Blueprint('boletas', __name__)
 # Lista alumnos con sus calificaciones para generar boletas
 # Query params: carrera_id, cuatrimestre, periodo
 # ============================================================
+def _alcance_periodo(periodo_id):
+    """Resuelve (alumno_ids, materia_ids) visibles para un período (slice 2).
+
+    Usa la columna directa Calificacion.periodo_id. Las calificaciones
+    legacy con periodo_id NULL solo aparecen bajo "Todos".
+    """
+    rows = (db.session.query(Calificacion.alumno_id, Calificacion.materia_id)
+            .filter(Calificacion.periodo_id == periodo_id,
+                    Calificacion.calificacion_final > 0).all())
+    return {r[0] for r in rows}, {r[1] for r in rows}
+
+
 @boletas_bp.route('/alumnos', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def listar_alumnos_boletas():
     carrera_id = request.args.get('carrera_id', type=int)
     grupo_id = request.args.get('grupo_id', type=int)
@@ -34,7 +47,6 @@ def listar_alumnos_boletas():
         query = query.filter_by(carrera_id=carrera_id)
     
     if grupo_id:
-        from models import GrupoIntegrante
         alumno_ids = db.session.query(GrupoIntegrante.alumno_id).filter_by(grupo_id=grupo_id)
         query = query.filter(Alumno.id.in_(alumno_ids))
     
@@ -48,15 +60,34 @@ def listar_alumnos_boletas():
             )
         )
     
+    periodo_ids = None
+    periodo_id_filter = None
+    raw_periodo = request.args.get('periodo_id')
+    if raw_periodo is not None:
+        try:
+            periodo_id_filter = int(raw_periodo)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'periodo_id inválido'}), 422
+        if not db.session.get(Periodo, periodo_id_filter):
+            return jsonify({'error': 'periodo_id inválido'}), 422
+        periodo_ids, _ = _alcance_periodo(periodo_id_filter)
+
     alumnos = query.order_by(Alumno.apellido_paterno, Alumno.nombre).all()
     
     result = []
     for a in alumnos:
         # Contar calificaciones con nota
-        calif_count = Calificacion.query.filter(
+        q = Calificacion.query.filter(
             Calificacion.alumno_id == a.id,
             Calificacion.calificacion_final > 0
-        ).count()
+        )
+        if periodo_ids is not None:
+            if a.id not in periodo_ids:
+                continue
+            q = q.filter(Calificacion.periodo_id == periodo_id_filter)
+        calif_count = q.count()
+        if periodo_ids is not None and calif_count == 0:
+            continue
         
         result.append({
             'id': a.id,
@@ -83,12 +114,17 @@ def _boleta_forbidden(alumno):
 @boletas_bp.route('/download/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def descargar_boleta(alumno_id):
+    claims = get_jwt()
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({'error': 'Alumno no encontrado'}), 404
     if _boleta_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     
@@ -138,6 +174,7 @@ def descargar_boleta(alumno_id):
 @boletas_bp.route('/download-multiple', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def descargar_boletas_multiples():
     alumno_ids_str = request.args.get('alumno_ids', '')
     if not alumno_ids_str:
@@ -200,12 +237,17 @@ def descargar_boletas_multiples():
 @boletas_bp.route('/preview/<int:alumno_id>', methods=['GET'])
 @jwt_required()
 @admin_required
+@require_sede
 def vista_previa_boleta(alumno_id):
+    claims = get_jwt()
     alumno = db.session.get(Alumno, alumno_id)
     if not alumno:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({'error': 'Alumno no encontrado'}), 404
     if _boleta_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     carrera = db.session.get(Carrera, alumno.carrera_id)
     
@@ -223,6 +265,8 @@ def vista_previa_boleta(alumno_id):
             'calificacion': c.calificacion_final,
             'periodo': c.periodo,
             'anio': c.anio,
+            'periodo_id': c.periodo_id,
+            'periodo_nombre': c.periodo_obj.nombre if c.periodo_obj else 'Sin periodo',
         })
     
     calif_validas = [c.calificacion_final for c in calificaciones if c.calificacion_final > 0]

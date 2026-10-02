@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from models import db, Admin, Alumno, Profesor, Carrera, Materia, Calificacion, Config, Sede
 from utils.security import generate_tokens, validate_email, validate_numero_control, generate_reset_token, verify_reset_token
-from utils.decorators import admin_required, alumno_required
+from utils.decorators import admin_required, alumno_required, public_route, global_route
 from utils.email import send_email, render_reset_email
 from extensions import limiter
 
@@ -57,6 +57,7 @@ def _find_user_by_email(email: str) -> tuple:
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 @limiter.limit("10/minute")
+@public_route
 def login():
     """
     Inicio de sesión para admin o alumno
@@ -79,7 +80,18 @@ def login():
     # Buscar en admins
     admin = Admin.query.filter_by(email=email).first()
     if admin and admin.check_password(password):
-        tokens = generate_tokens(admin.id, 'admin', role=getattr(admin, 'role', 'general_admin'), sede_id=getattr(admin, 'sede_id', None))
+        admin_role = getattr(admin, 'role', 'general_admin')
+        admin_sede_id = getattr(admin, 'sede_id', None)
+        if admin_role == 'general_admin' and admin_sede_id is not None:
+            current_app.logger.error(f"admin {admin.id} general_admin with sede_id — fail closed")
+            return jsonify({'error': 'Error interno de alcance', 'code': 'SCOPE_ERROR'}), 500
+        if admin_role == 'sede_admin' and admin_sede_id is None:
+            current_app.logger.error(f"admin {admin.id} sede_admin without sede_id — fail closed")
+            return jsonify({'error': 'Error interno de alcance', 'code': 'SCOPE_ERROR'}), 500
+        admin_sede = getattr(admin, 'sede', None)
+        admin_slug = admin_sede.codigo if admin_sede else None
+        tokens = generate_tokens(admin.id, 'admin', role=admin_role, sede_id=admin_sede_id,
+                                 sede_slug=admin_slug)
         return jsonify({
             'message': 'Login exitoso',
             'user': {
@@ -88,9 +100,10 @@ def login():
                 'username': admin.username,
                 'nombre': admin.nombre,
                 'email': admin.email,
-                'role': getattr(admin, 'role', None),
-                'sede_id': getattr(admin, 'sede_id', None),
-                'sede': admin.sede.to_dict() if getattr(admin, 'sede', None) else None,
+                'role': admin_role,
+                'sede_id': admin_sede_id,
+                'sede_slug': admin_slug,
+                'sede': admin_sede.to_dict() if admin_sede else None,
             },
             **tokens
         }), 200
@@ -100,8 +113,12 @@ def login():
     if profesor and profesor.check_password(password):
         if not profesor.activo:
             return jsonify({'error': 'Tu cuenta está desactivada. Contacta al administrador.'}), 403
-        
-        tokens = generate_tokens(profesor.id, 'profesor')
+        if profesor.sede_id is None:
+            current_app.logger.error(f"profesor {profesor.id} without sede_id — fail closed")
+            return jsonify({'error': 'Error interno de alcance', 'code': 'SCOPE_ERROR'}), 500
+        sede = db.session.get(Sede, profesor.sede_id)
+        tokens = generate_tokens(profesor.id, 'profesor', sede_id=profesor.sede_id,
+                                 sede_slug=(sede.codigo if sede else None))
         return jsonify({
             'message': 'Login exitoso',
             'user': {
@@ -111,6 +128,9 @@ def login():
                 'nombre': f'{profesor.nombre} {profesor.apellido_paterno}',
                 'email': profesor.email,
                 'titulo': profesor.titulo or '',
+                'sede_id': profesor.sede_id,
+                'sede_slug': sede.codigo if sede else None,
+                'sede': sede.to_dict() if sede else None,
             },
             **tokens
         }), 200
@@ -128,7 +148,12 @@ def login():
         except Exception:
             pass
         
-        tokens = generate_tokens(alumno.id, 'alumno')
+        if alumno.sede_id is None:
+            current_app.logger.error(f"alumno {alumno.id} without sede_id — fail closed")
+            return jsonify({'error': 'Error interno de alcance', 'code': 'SCOPE_ERROR'}), 500
+        sede = db.session.get(Sede, alumno.sede_id)
+        tokens = generate_tokens(alumno.id, 'alumno', sede_id=alumno.sede_id,
+                                 sede_slug=(sede.codigo if sede else None))
         return jsonify({
             'message': 'Login exitoso',
             'user': {
@@ -137,7 +162,10 @@ def login():
                 'numero_control': alumno.numero_control,
                 'nombre': alumno.nombre_completo,
                 'email': alumno.email,
-                'carrera': alumno.carrera.nombre if alumno.carrera else None
+                'carrera': alumno.carrera.nombre if alumno.carrera else None,
+                'sede_id': alumno.sede_id,
+                'sede_slug': sede.codigo if sede else None,
+                'sede': sede.to_dict() if sede else None
             },
             **tokens
         }), 200
@@ -147,6 +175,7 @@ def login():
 
 @auth_bp.route('/register', methods=['POST'])
 @limiter.limit("5 per hour")
+@public_route
 def register():
     """
     Registro de nuevo alumno via link oculto /r/a/:token
@@ -251,6 +280,7 @@ def register():
 
 @auth_bp.route('/register/profesor', methods=['POST'])
 @limiter.limit("5 per hour")
+@public_route
 def register_profesor():
     """
     Registro de nuevo profesor via link oculto /r/p/:token
@@ -352,6 +382,7 @@ def register_profesor():
 
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
+@global_route
 def logout():
     """
     Cerrar sesión (el token se invalida desde el cliente)
@@ -363,6 +394,7 @@ def logout():
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
+@global_route
 def get_current_user():
     """
     Obtiene la información del usuario actual
@@ -388,12 +420,22 @@ def get_current_user():
             'type': 'alumno',
             'user': alumno.to_dict_public()
         }), 200
+
+    elif user_type == 'profesor':
+        profesor = db.session.get(Profesor, user_id)
+        if not profesor:
+            return jsonify({'error': 'Usuario no encontrado'}), 404
+        return jsonify({
+            'type': 'profesor',
+            'user': profesor.to_dict()
+        }), 200
     
     return jsonify({'error': 'Tipo de usuario inválido'}), 400
 
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
+@global_route
 def refresh_token():
     """
     Refresca el token de acceso usando el refresh token
@@ -404,7 +446,8 @@ def refresh_token():
         claims['id'],
         user_type,
         role=claims.get('role'),
-        sede_id=claims.get('sede_id')
+        sede_id=claims.get('sede_id'),
+        sede_slug=claims.get('sede_slug')
     )
     
     return jsonify({
@@ -415,6 +458,7 @@ def refresh_token():
 
 @auth_bp.route('/change-password', methods=['POST'])
 @jwt_required()
+@global_route
 def change_password():
     """
     Cambiar contraseña del usuario actual
@@ -469,6 +513,7 @@ def change_password():
 
 @auth_bp.route('/forgot-password', methods=['POST'])
 @limiter.limit("5/hour")
+@public_route
 def forgot_password():
     """
     POST /api/auth/forgot-password
@@ -536,6 +581,7 @@ def forgot_password():
 
 @auth_bp.route('/reset-password', methods=['POST'])
 @limiter.limit("10/hour")
+@public_route
 def reset_password():
     """
     POST /api/auth/reset-password

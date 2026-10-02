@@ -97,6 +97,7 @@ def create_app(config_name=None):
     from routes.settings import settings_bp
     from routes.imports import imports_bp
     from routes.boletas import boletas_bp
+    from routes.periodos import periodos_bp
     from routes.sedes import sedes_bp
     from routes.wiki import wiki_bp
     
@@ -116,6 +117,7 @@ def create_app(config_name=None):
     app.register_blueprint(settings_bp, url_prefix='/api/config')
     app.register_blueprint(imports_bp, url_prefix='/api/imports')
     app.register_blueprint(boletas_bp, url_prefix='/api/boletas')
+    app.register_blueprint(periodos_bp, url_prefix='/api/periodos')
     app.register_blueprint(sedes_bp, url_prefix='/api/sedes')
     app.register_blueprint(wiki_bp, url_prefix='/api/wiki')
     

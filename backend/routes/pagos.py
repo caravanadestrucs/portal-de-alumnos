@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
 from models import db, NotaRemision, Alumno, Admin
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 
 pagos_bp = Blueprint('pagos', __name__)
 
@@ -20,6 +20,7 @@ def _pago_alumno_forbidden(alumno):
 
 @pagos_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno_pagos(alumno_id):
     """
     Obtiene todas las notas de remisión de un alumno — scoped
@@ -29,9 +30,14 @@ def get_alumno_pagos(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver estos pagos'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _pago_alumno_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Filtros
     pagada = request.args.get('pagada')
@@ -62,6 +68,7 @@ def get_alumno_pagos(alumno_id):
 
 @pagos_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_nota():
     """
     Crea una nueva nota de remisión (admin)
@@ -125,6 +132,7 @@ def create_nota():
 
 @pagos_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_nota(id):
     """
     Actualiza una nota de remisión (admin) — scoped
@@ -170,11 +178,17 @@ def update_nota(id):
 
 @pagos_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_nota(id):
     """
     Obtiene una nota por ID — scoped
     """
-    nota = NotaRemision.query.get_or_404(id)
+    nota = db.session.get(NotaRemision, id)
+    if nota is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Nota no encontrada'}), 404
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != nota.alumno_id:
@@ -182,13 +196,14 @@ def get_nota(id):
     if (claims.get('user_type') or claims.get('type')) == 'admin' and claims.get('role') == 'sede_admin':
         alumno = db.session.get(Alumno, nota.alumno_id)
         if alumno and alumno.sede_id != claims.get('sede_id'):
-            return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+            return forbidden_uniform()
     
     return jsonify({'nota': nota.to_dict()}), 200
 
 
 @pagos_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_nota(id):
     """
     Elimina una nota de remisión (admin) — scoped
@@ -211,6 +226,7 @@ def delete_nota(id):
 
 @pagos_bp.route('/toggle-pagado/<int:id>', methods=['PATCH'])
 @admin_required
+@require_sede
 def toggle_pagado(id):
     """
     Cambia el estado de pagado/no pagado de una nota (admin) — scoped
@@ -245,6 +261,7 @@ def toggle_pagado(id):
 
 @pagos_bp.route('/marcar-pagado/<int:id>', methods=['PATCH'])
 @admin_required
+@require_sede
 def marcar_pagado(id):
     """
     Marca una nota como pagada con fecha específica (admin) — scoped
@@ -277,6 +294,7 @@ def marcar_pagado(id):
 
 @pagos_bp.route('/resumen-general', methods=['GET'])
 @admin_required
+@require_sede
 def get_resumen_general():
     """
     Resumen general de todas las notas (admin)
@@ -311,6 +329,7 @@ def get_resumen_general():
 
 @pagos_bp.route('/todas', methods=['GET'])
 @admin_required
+@require_sede
 def get_all_notas():
     """
     Lista todas las notas con filtros (admin)
@@ -361,6 +380,7 @@ def get_all_notas():
 
 @pagos_bp.route('/alumnos-pendientes', methods=['GET'])
 @admin_required
+@require_sede
 def get_alumnos_pendientes():
     """
     Lista alumnos con pagos pendientes y su total

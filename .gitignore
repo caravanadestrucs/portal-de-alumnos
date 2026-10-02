@@ -46,3 +46,6 @@ docker-compose.override.yml
 boletas/
 BOLETAS TEOTITLAN 2025/
 
+# Agent scratch workspaces (plans ledgers, briefs, reports)
+.superpowers/
+

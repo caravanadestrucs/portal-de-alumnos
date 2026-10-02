@@ -4,10 +4,26 @@ Rutas para gestión de Calificaciones
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
-from models import db, Calificacion, Alumno, Materia
-from utils.decorators import admin_required
+from models import db, Alumno, Calificacion, Materia, Asignacion, GrupoIntegrante
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 
 calificaciones_bp = Blueprint('calificaciones', __name__)
+
+
+def _periodo_id_para_nota(materia_id, alumno_id):
+    """Hereda el periodo_id de la asignación vinculada (profesor + grupo + materia).
+
+    Busca los grupos del alumno, intersecta con las asignaciones de la materia
+    y devuelve el periodo_id de la asignación con id mayor. Sin match: None.
+    """
+    grupo_ids = [r[0] for r in db.session.query(GrupoIntegrante.grupo_id)
+                 .filter_by(alumno_id=alumno_id).all()]
+    if not grupo_ids:
+        return None
+    asig = (Asignacion.query
+            .filter(Asignacion.materia_id == materia_id, Asignacion.grupo_id.in_(grupo_ids))
+            .order_by(Asignacion.id.desc()).first())
+    return asig.periodo_id if asig else None
 
 
 def _alumno_sede_forbidden(alumno):
@@ -19,6 +35,7 @@ def _alumno_sede_forbidden(alumno):
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_alumno_calificaciones(alumno_id):
     """
     Obtiene todas las calificaciones de un alumno — scoped via alumno.sede_id
@@ -29,9 +46,14 @@ def get_alumno_calificaciones(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver estas calificaciones'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Filtros opcionales
     periodo = request.args.get('periodo')
@@ -81,6 +103,7 @@ def get_alumno_calificaciones(alumno_id):
 
 @calificaciones_bp.route('', methods=['POST'])
 @admin_required
+@require_sede
 def create_or_update_calificacion():
     """
     Crea o actualiza una calificación (admin)
@@ -166,6 +189,7 @@ def create_or_update_calificacion():
             db.session.add(calificacion)
             message = 'Calificación creada exitosamente'
         
+        calificacion.periodo_id = _periodo_id_para_nota(data['materia_id'], data['alumno_id'])
         db.session.commit()
         
         return jsonify({
@@ -180,6 +204,7 @@ def create_or_update_calificacion():
 
 @calificaciones_bp.route('/alumnos/<int:alumno_id>/historial', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_historial(alumno_id):
     """
     Obtiene el historial completo del alumno (para el portal) — scoped
@@ -191,9 +216,14 @@ def get_historial(alumno_id):
     if claims.get('type') == 'alumno' and claims['id'] != alumno_id:
         return jsonify({'error': 'No tienes permiso para ver este historial'}), 403
     
-    alumno = Alumno.query.get_or_404(alumno_id)
+    alumno = db.session.get(Alumno, alumno_id)
+    if alumno is None:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Alumno no encontrado'}), 404
     if _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     # Obtener todas las calificaciones
     calificaciones = Calificacion.query.filter_by(alumno_id=alumno_id)\
@@ -234,11 +264,17 @@ def get_historial(alumno_id):
 
 @calificaciones_bp.route('/<int:id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_calificacion(id):
     """
     Obtiene una calificación por ID — scoped
     """
-    calificacion = Calificacion.query.get_or_404(id)
+    calificacion = db.session.get(Calificacion, id)
+    if calificacion is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Calificación no encontrada'}), 404
     
     claims = get_jwt()
     if claims.get('type') == 'alumno' and claims['id'] != calificacion.alumno_id:
@@ -246,13 +282,14 @@ def get_calificacion(id):
     # admin sede check via alumno
     alumno = db.session.get(Alumno, calificacion.alumno_id)
     if alumno and _alumno_sede_forbidden(alumno):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     return jsonify({'calificacion': calificacion.to_dict()}), 200
 
 
 @calificaciones_bp.route('/<int:id>', methods=['PUT'])
 @admin_required
+@require_sede
 def update_calificacion(id):
     """
     Actualiza una calificación por ID (admin) — scoped via alumno
@@ -293,6 +330,7 @@ def update_calificacion(id):
         if 'anio' in data:
             calificacion.anio = int(data['anio'])
 
+        calificacion.periodo_id = _periodo_id_para_nota(calificacion.materia_id, calificacion.alumno_id)
         db.session.commit()
 
         return jsonify({
@@ -307,6 +345,7 @@ def update_calificacion(id):
 
 @calificaciones_bp.route('/<int:id>', methods=['DELETE'])
 @admin_required
+@require_sede
 def delete_calificacion(id):
     """
     Elimina una calificación (admin) — scoped via alumno
@@ -329,6 +368,7 @@ def delete_calificacion(id):
 
 @calificaciones_bp.route('/periodos', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_periodos():
     """
     Obtiene todos los periodos/años únicos en las calificaciones
@@ -357,6 +397,7 @@ def get_periodos():
 
 @calificaciones_bp.route('/bulk', methods=['POST', 'PUT'])
 @admin_required
+@require_sede
 def bulk_create_calificaciones():
     """
     Crea múltiples calificaciones a la vez (admin)
@@ -398,6 +439,7 @@ def bulk_create_calificaciones():
             
             if existente:
                 existente.calificacion_final = max(0, min(10, float(cal_data.get('calificacion_final', 0))))
+                existente.periodo_id = _periodo_id_para_nota(existente.materia_id, existente.alumno_id)
                 existente.practica_1 = max(0, min(10, float(cal_data.get('practica_1', 0))))
                 existente.practica_2 = max(0, min(10, float(cal_data.get('practica_2', 0))))
                 existente.extra_1 = max(0, min(10, float(cal_data.get('extra_1', 0))))
@@ -412,7 +454,8 @@ def bulk_create_calificaciones():
                     extra_2=max(0, min(10, float(cal_data.get('extra_2', 0)))),
                     calificacion_final=max(0, min(10, float(cal_data.get('calificacion_final', 0)))),
                     periodo=cal_data.get('periodo', 'Regular'),
-                    anio=cal_data.get('anio', 2026)
+                    anio=cal_data.get('anio', 2026),
+                    periodo_id=_periodo_id_para_nota(cal_data['materia_id'], cal_data['alumno_id']),
                 )
                 db.session.add(nueva)
             

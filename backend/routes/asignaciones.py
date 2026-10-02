@@ -6,14 +6,16 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt
 from datetime import datetime
 
-from models import db, Asignacion, Profesor, Materia, Grupo
-from utils.decorators import admin_required
+from models import db, Asignacion, Profesor, Materia, Grupo, Periodo
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
+from utils.validators import validate_same_sede, SameSedeError
 
 asignaciones_bp = Blueprint('asignaciones', __name__)
 
 
 @asignaciones_bp.route('', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignaciones():
     """
     Obtiene todas las asignaciones
@@ -84,19 +86,26 @@ def _asig_forbidden(asignacion):
 
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignacion(asignacion_id):
     """
     Obtiene una asignacion por ID — scoped
     """
-    asignacion = Asignacion.query.get_or_404(asignacion_id)
+    asignacion = db.session.get(Asignacion, asignacion_id)
+    if asignacion is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Asignacion no encontrada'}), 404
     if _asig_forbidden(asignacion):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     return jsonify({'asignacion': asignacion.to_dict()}), 200
 
 
 @asignaciones_bp.route('', methods=['POST'])
 @jwt_required()
 @admin_required
+@require_sede
 def create_asignacion():
     """
     Crea una nueva asignacion
@@ -111,7 +120,15 @@ def create_asignacion():
     for field in required:
         if not data.get(field):
             return jsonify({'error': f'El campo {field} es requerido'}), 400
-    
+
+    periodo_id = data.get('periodo_id')
+    if periodo_id is None:
+        return jsonify({'error': 'El campo periodo_id es requerido'}), 422
+
+    periodo = db.session.get(Periodo, periodo_id)
+    if not periodo or not periodo.activa:
+        return jsonify({'error': 'periodo_id inválido o inactivo'}), 422
+
     # Verificar que existe el profesor
     profesor = db.session.get(Profesor, data['profesor_id'])
     if not profesor:
@@ -126,6 +143,13 @@ def create_asignacion():
     grupo = db.session.get(Grupo, data['grupo_id'])
     if not grupo:
         return jsonify({'error': 'Grupo no encontrado'}), 404
+
+    # Dominio: profesor y grupo deben pertenecer a la misma sede (spec §6.3).
+    # Mismatch → 403 uniforme sin enumerar (igual para general y sede_admin).
+    try:
+        validate_same_sede(profesor, grupo)
+    except SameSedeError:
+        return forbidden_uniform()
 
     # sede scoping: all must belong to same sede for sede_admin
     claims = get_jwt()
@@ -162,6 +186,7 @@ def create_asignacion():
         grupo_id=data['grupo_id'],
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
+        periodo_id=periodo.id,
         activo=data.get('activo', True)
     )
     
@@ -175,6 +200,8 @@ def create_asignacion():
     
     return jsonify({
         'message': 'Asignación creada exitosamente',
+        'profesor_sede_id': profesor.sede_id,
+        'grupo_sede_id': grupo.sede_id,
         'asignacion': asignacion.to_dict()
     }), 201
 
@@ -182,6 +209,7 @@ def create_asignacion():
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['PUT'])
 @jwt_required()
 @admin_required
+@require_sede
 def update_asignacion(asignacion_id):
     """
     Actualiza una asignacion — scoped
@@ -225,9 +253,29 @@ def update_asignacion(asignacion_id):
         except ValueError:
             return jsonify({'error': 'Formato de fecha inválido'}), 400
     
+    if 'periodo_id' in data:
+        if data['periodo_id'] is None:
+            asignacion.periodo_id = None
+        else:
+            periodo = db.session.get(Periodo, data['periodo_id'])
+            if not periodo:
+                return jsonify({'error': 'periodo_id inexistente'}), 422
+            if periodo.nombre == 'Sin periodo':
+                return jsonify({'error': 'periodo_id reservado'}), 422
+            asignacion.periodo_id = periodo.id
+
     if 'activo' in data:
         asignacion.activo = data['activo']
-    
+
+    # Dominio: el par final profesor/grupo debe seguir en la misma sede.
+    final_profesor = db.session.get(Profesor, asignacion.profesor_id)
+    final_grupo = db.session.get(Grupo, asignacion.grupo_id)
+    try:
+        validate_same_sede(final_profesor, final_grupo)
+    except SameSedeError:
+        db.session.rollback()
+        return forbidden_uniform()
+
     try:
         db.session.commit()
     except Exception as e:
@@ -244,6 +292,7 @@ def update_asignacion(asignacion_id):
 @asignaciones_bp.route('/<int:asignacion_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
+@require_sede
 def delete_asignacion(asignacion_id):
     """
     Elimina una asignacion — scoped
@@ -269,6 +318,7 @@ def delete_asignacion(asignacion_id):
 
 @asignaciones_bp.route('/<int:asignacion_id>/puede-editar', methods=['GET'])
 @jwt_required()
+@require_sede
 def puede_editar(asignacion_id):
     """
     Verifica si actualmente se puede editar calificaciones para esta asignacion
@@ -286,6 +336,7 @@ def puede_editar(asignacion_id):
 
 @asignaciones_bp.route('/profesor/<int:profesor_id>/actuales', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_asignaciones_actuales_profesor(profesor_id):
     """
     Obtiene las asignaciones actuales de un profesor
@@ -295,10 +346,19 @@ def get_asignaciones_actuales_profesor(profesor_id):
     
     profesor = Profesor.query.get_or_404(profesor_id)
     today = date.today()
-    
+
+    # Alcance: un profesor solo ve sus propias asignaciones; el listado nunca
+    # amplía por join: solo filas cuya sede coincide con profesor.sede_id.
+    claims = get_jwt()
+    claims_uid = claims.get('id')
+    claims_utype = claims.get('type') or claims.get('user_type')
+    if claims_utype == 'profesor' and str(claims_uid) != str(profesor_id):
+        return forbidden_uniform()
+
     # Asignaciones donde hoy está dentro del período
-    asignaciones = Asignacion.query.filter(
+    asignaciones = Asignacion.query.join(Grupo, Asignacion.grupo_id == Grupo.id).filter(
         Asignacion.profesor_id == profesor_id,
+        Grupo.sede_id == profesor.sede_id,
         Asignacion.activo == True,
         Asignacion.fecha_inicio <= today,
         Asignacion.fecha_fin >= today

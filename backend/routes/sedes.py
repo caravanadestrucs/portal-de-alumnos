@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
 from models import db, Sede
-from utils.decorators import general_admin_required
+from utils.decorators import general_admin_required, require_sede, global_route, forbidden_uniform
 
 sedes_bp = Blueprint('sedes', __name__)
 
@@ -22,6 +22,7 @@ def _is_sede_visible_for_sede_admin(sede_id: int, claims: dict) -> bool:
 @sedes_bp.route('', methods=['GET'])
 @sedes_bp.route('/', methods=['GET'])
 @jwt_required()
+@require_sede
 def list_sedes():
     claims = get_jwt()
     role = claims.get("role")
@@ -41,6 +42,7 @@ def list_sedes():
 @sedes_bp.route('', methods=['POST'])
 @sedes_bp.route('/', methods=['POST'])
 @general_admin_required
+@global_route
 def create_sede():
     data = request.get_json(silent=True)
     if not data:
@@ -72,22 +74,24 @@ def create_sede():
 
 @sedes_bp.route('/<int:sede_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_sede(sede_id):
-    sede = db.session.get(Sede, sede_id)
-    if not sede:
-        return jsonify({"error": "Sede not found"}), 404
     claims = get_jwt()
     role = claims.get("role")
     token_sede = claims.get("sede_id")
-    # sede_admin can only read own
+    # Anti-enumeración: sin scope válido no distinguir no-existe vs otra sede.
     if role == "sede_admin" and token_sede != sede_id:
-        return jsonify({"error": "Cross-sede forbidden", "code": "CROSS_SEDE"}), 403
+        return forbidden_uniform()
+    sede = db.session.get(Sede, sede_id)
+    if not sede:
+        return jsonify({"error": "Sede not found"}), 404
     # alumno/profesor/general can read any (general), but we still allow
     return jsonify({"sede": sede.to_dict()}), 200
 
 
 @sedes_bp.route('/<int:sede_id>', methods=['PUT'])
 @general_admin_required
+@global_route
 def update_sede(sede_id):
     sede = db.session.get(Sede, sede_id)
     if not sede:
@@ -126,6 +130,7 @@ def update_sede(sede_id):
 
 @sedes_bp.route('/<int:sede_id>', methods=['DELETE'])
 @general_admin_required
+@global_route
 def delete_sede(sede_id):
     sede = db.session.get(Sede, sede_id)
     if not sede:

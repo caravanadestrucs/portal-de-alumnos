@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import or_ as sa_or
 
 from models import db, WikiPage, WikiRevision, WikiAttachment, Sede
-from utils.decorators import sede_scoped_admin_required
+from utils.decorators import sede_scoped_admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_wiki
 
 wiki_bp = Blueprint('wiki', __name__)
@@ -138,6 +138,7 @@ def _check_page_write_access(page: WikiPage, claims):
 @wiki_bp.route('/pages', methods=['POST'])
 @wiki_bp.route('/pages/', methods=['POST'])
 @jwt_required()
+@require_sede
 def create_page():
     claims = get_jwt()
     data = request.get_json(silent=True)
@@ -223,6 +224,7 @@ def create_page():
 @wiki_bp.route('/pages', methods=['GET'])
 @wiki_bp.route('/pages/', methods=['GET'])
 @jwt_required()
+@require_sede
 def list_pages():
     claims = get_jwt()
     # base query scoped
@@ -275,13 +277,17 @@ def list_pages():
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_page(page_id):
+    claims = get_jwt()
     page = db.session.get(WikiPage, page_id)
     if not page:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({"error": "Wiki page not found"}), 404
-    claims = get_jwt()
     if not _is_wiki_visible(page.sede_id, claims):
-        return jsonify({"error": "Cross-sede forbidden", "code": "CROSS_SEDE"}), 403
+        return forbidden_uniform()
     return jsonify({"page": page.to_dict()}), 200
 
 
@@ -290,6 +296,7 @@ def get_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['PUT'])
 @jwt_required()
+@require_sede
 def update_page(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -337,6 +344,7 @@ def update_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>', methods=['DELETE'])
 @jwt_required()
+@require_sede
 def delete_page(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -367,13 +375,17 @@ def delete_page(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/history', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_history(page_id):
+    claims = get_jwt()
     page = db.session.get(WikiPage, page_id)
     if not page:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({"error": "Wiki page not found"}), 404
-    claims = get_jwt()
     if not _is_wiki_visible(page.sede_id, claims):
-        return jsonify({"error": "Cross-sede forbidden", "code": "CROSS_SEDE"}), 403
+        return forbidden_uniform()
     revisions = WikiRevision.query.filter_by(page_id=page_id).order_by(WikiRevision.created_at.asc(), WikiRevision.id.asc()).all()
     return jsonify({"revisions": [r.to_dict() for r in revisions], "history": [r.to_dict() for r in revisions], "total": len(revisions)}), 200
 
@@ -420,6 +432,7 @@ def _is_allowed_mime(mime: str) -> bool:
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/attachments', methods=['POST'])
 @jwt_required()
+@require_sede
 def upload_attachment(page_id):
     page = db.session.get(WikiPage, page_id)
     if not page:
@@ -508,13 +521,17 @@ def upload_attachment(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/pages/<int:page_id>/attachments', methods=['GET'])
 @jwt_required()
+@require_sede
 def list_attachments(page_id):
+    claims = get_jwt()
     page = db.session.get(WikiPage, page_id)
     if not page:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({"error": "Wiki page not found"}), 404
-    claims = get_jwt()
     if not _is_wiki_visible(page.sede_id, claims):
-        return jsonify({"error": "Cross-sede forbidden", "code": "CROSS_SEDE"}), 403
+        return forbidden_uniform()
     attachments = WikiAttachment.query.filter_by(page_id=page_id).order_by(WikiAttachment.created_at.asc()).all()
     return jsonify({"attachments": [a.to_dict() for a in attachments], "total": len(attachments)}), 200
 
@@ -524,16 +541,23 @@ def list_attachments(page_id):
 # ------------------------------------------------------------
 @wiki_bp.route('/attachments/<int:attachment_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def download_attachment(attachment_id):
+    claims = get_jwt()
     att = db.session.get(WikiAttachment, attachment_id)
     if not att:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({"error": "Attachment not found"}), 404
     page = db.session.get(WikiPage, att.page_id)
     if not page:
+        miss = uniform_missing_response(claims)
+        if miss is not None:
+            return miss
         return jsonify({"error": "Page not found"}), 404
-    claims = get_jwt()
     if not _is_wiki_visible(page.sede_id, claims):
-        return jsonify({"error": "Cross-sede forbidden", "code": "CROSS_SEDE"}), 403
+        return forbidden_uniform()
     if not att.path or not os.path.exists(att.path):
         return jsonify({"error": "File not found on disk"}), 404
     # send file

@@ -6,7 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 
 from sqlalchemy.orm import joinedload
 from models import db, Grupo, GrupoIntegrante, Alumno, Carrera, Sede
-from utils.decorators import admin_required
+from utils.decorators import admin_required, require_sede, forbidden_uniform, uniform_missing_response
 from utils.scope import scope_by_sede
 
 grupos_bp = Blueprint('grupos', __name__)
@@ -14,6 +14,7 @@ grupos_bp = Blueprint('grupos', __name__)
 
 @grupos_bp.route('', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_grupos():
     """
     Obtiene todos los grupos
@@ -60,13 +61,19 @@ def _grupo_sede_forbidden(grupo):
 
 @grupos_bp.route('/<int:grupo_id>', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_grupo(grupo_id):
     """
     Obtiene un grupo por ID con sus integrantes — scoped
     """
-    grupo = Grupo.query.get_or_404(grupo_id)
+    grupo = db.session.get(Grupo, grupo_id)
+    if grupo is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Grupo no encontrado'}), 404
     if _grupo_sede_forbidden(grupo):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     return jsonify({
         'grupo': grupo.to_dict(),
@@ -77,6 +84,7 @@ def get_grupo(grupo_id):
 @grupos_bp.route('', methods=['POST'])
 @jwt_required()
 @admin_required
+@require_sede
 def create_grupo():
     """
     Crea un nuevo grupo
@@ -146,6 +154,7 @@ def create_grupo():
 @grupos_bp.route('/<int:grupo_id>', methods=['PUT'])
 @jwt_required()
 @admin_required
+@require_sede
 def update_grupo(grupo_id):
     """
     Actualiza un grupo — scoped
@@ -181,6 +190,7 @@ def update_grupo(grupo_id):
 @grupos_bp.route('/<int:grupo_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
+@require_sede
 def delete_grupo(grupo_id):
     """
     Elimina un grupo y sus integrantes — scoped
@@ -206,13 +216,19 @@ def delete_grupo(grupo_id):
 
 @grupos_bp.route('/<int:grupo_id>/integrantes', methods=['GET'])
 @jwt_required()
+@require_sede
 def get_integrantes(grupo_id):
     """
     Obtiene los integrantes de un grupo — scoped
     """
-    grupo = Grupo.query.options(joinedload(Grupo.carrera)).get_or_404(grupo_id)
+    grupo = db.session.get(Grupo, grupo_id)
+    if grupo is None:
+        miss = uniform_missing_response(get_jwt())
+        if miss is not None:
+            return miss
+        return jsonify({'error': 'Grupo no encontrado'}), 404
     if _grupo_sede_forbidden(grupo):
-        return jsonify({'error': 'Cross-sede forbidden', 'code': 'CROSS_SEDE'}), 403
+        return forbidden_uniform()
     
     integrantes = GrupoIntegrante.query.filter_by(grupo_id=grupo_id).options(joinedload(GrupoIntegrante.alumno)).all()
     
@@ -226,6 +242,7 @@ def get_integrantes(grupo_id):
 @grupos_bp.route('/<int:grupo_id>/integrantes', methods=['POST'])
 @jwt_required()
 @admin_required
+@require_sede
 def add_integrante(grupo_id):
     """
     Agrega un alumno al grupo — scoped by alumno sede
@@ -281,6 +298,7 @@ def add_integrante(grupo_id):
 @grupos_bp.route('/<int:grupo_id>/integrantes/<int:alumno_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
+@require_sede
 def remove_integrante(grupo_id, alumno_id):
     """
     Remueve un integrante del grupo
@@ -304,6 +322,7 @@ def remove_integrante(grupo_id, alumno_id):
 @grupos_bp.route('/<int:grupo_id>/integrantes/bulk', methods=['POST'])
 @jwt_required()
 @admin_required
+@require_sede
 def add_integrantes_bulk(grupo_id):
     """
     Agrega múltiples alumnos al grupo — scoped
