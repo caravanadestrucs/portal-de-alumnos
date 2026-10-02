@@ -7,6 +7,7 @@ const MOCK_ITEMS = [
   { id: 3, label: 'Grupos', path: '/admin/grupos' },
   { id: 4, label: 'Materias', path: '/admin/materias' },
   { id: 5, label: 'Calificaciones', path: '/admin/calificaciones' },
+  { id: 6, label: 'Periodos', path: '/admin/periodos' },
 ];
 
 export default function GlobalSearch() {

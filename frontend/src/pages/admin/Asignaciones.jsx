@@ -86,6 +86,18 @@ export default function AdminAsignaciones() {
     }
   };
 
+  // Cuando se selecciona un periodo, autocompletar fechas si el periodo las tiene
+  const handlePeriodoChange = (value) => {
+    const periodoId = value === '' ? '' : parseInt(value);
+    const periodo = periodoId !== '' ? periodos.find(p => p.id === periodoId) : null;
+    setFormData({
+      ...formData,
+      periodo_id: periodoId,
+      ...(periodo?.fecha_inicio ? { fecha_inicio: periodo.fecha_inicio } : {}),
+      ...(periodo?.fecha_fin ? { fecha_fin: periodo.fecha_fin } : {}),
+    });
+  };
+
   // Filtrar materias por la carrera del grupo seleccionado
   const materiasFiltradas = grupoCarreraId 
     ? materias.filter(m => m.carrera_id === grupoCarreraId)
@@ -432,7 +444,7 @@ export default function AdminAsignaciones() {
                 label="Período *"
                 required
                 value={formData.periodo_id}
-                onChange={(e) => setFormData({ ...formData, periodo_id: e.target.value === '' ? '' : parseInt(e.target.value) })}
+                onChange={(e) => handlePeriodoChange(e.target.value)}
               >
                 <option value="">Seleccionar período</option>
                 {periodos

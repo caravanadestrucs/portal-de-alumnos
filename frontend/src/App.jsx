@@ -32,6 +32,7 @@ import AdminRequisitos from './pages/admin/Requisitos';
 const AdminImportar = lazy(() => import('./pages/admin/Importar'));
 const AdminBoletas = lazy(() => import('./pages/admin/Boletas'));
 const AdminSedes = lazy(() => import('./pages/admin/Sedes'));
+const AdminPeriodos = lazy(() => import('./pages/admin/Periodos'));
 const AdminWiki = lazy(() => import('./pages/admin/WikiAdmin'));
 const WikiPage = lazy(() => import('./pages/WikiPage'));
 
@@ -157,6 +158,7 @@ function App() {
               <Route path="profesores" element={<AdminProfesores />} />
               <Route path="grupos" element={<AdminGrupos />} />
               <Route path="asignaciones" element={<AdminAsignaciones />} />
+              <Route path="periodos" element={<AdminPeriodos />} />
               <Route path="importar" element={<AdminImportar />} />
               <Route path="boletas" element={<AdminBoletas />} />
               <Route path="admins" element={<AdminAdmins />} />

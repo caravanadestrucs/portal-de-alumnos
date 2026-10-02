@@ -23,6 +23,7 @@ vi.mock('../../components/ui/Toast', () => ({ useToast: () => ({ success: vi.fn(
 
 import AdminAsignaciones from './Asignaciones';
 import { getAsignaciones, createAsignacion, updateAsignacion } from '../../api/asignaciones';
+import { getPeriodos } from '../../api/periodos';
 
 describe('Asignaciones periodo UI', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -58,5 +59,20 @@ describe('Asignaciones periodo UI', () => {
     fireEvent.click(screen.getByText('Actualizar'));
     await waitFor(() => expect(updateAsignacion).toHaveBeenCalledWith(
       7, expect.objectContaining({ periodo_id: null })));
+  });
+
+  it('al seleccionar un periodo con fechas, autocompleta fecha_inicio/fecha_fin', async () => {
+    getPeriodos.mockResolvedValueOnce({ periodos: [
+      { id: 1, nombre: 'Enero-Abril 2026', fecha_inicio: '2026-01-01', fecha_fin: '2026-04-30', activa: true },
+    ] });
+    const { container } = render(<AdminAsignaciones />);
+    fireEvent.click(await screen.findByText('Nueva Asignación'));
+    fireEvent.change(screen.getByLabelText(/Período/), { target: { value: '1' } });
+    // los inputs de fecha no tienen label asociado (htmlFor), se consultan por tipo
+    await waitFor(() => {
+      const dateInputs = container.querySelectorAll('input[type="date"]');
+      expect(dateInputs[0]).toHaveValue('2026-01-01');
+      expect(dateInputs[1]).toHaveValue('2026-04-30');
+    });
   });
 });

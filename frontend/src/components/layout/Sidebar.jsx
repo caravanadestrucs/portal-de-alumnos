@@ -21,6 +21,7 @@ import {
   FileDown,
   Building2,
   Library,
+  CalendarDays,
 } from 'lucide-react';
 
 const adminNavItems = [
@@ -33,6 +34,7 @@ const adminNavItems = [
   { path: '/admin/profesores', icon: UserCheck, label: 'Profesores' },
   { path: '/admin/grupos', icon: FolderCog, label: 'Grupos' },
   { path: '/admin/asignaciones', icon: ClipboardList, label: 'Asignaciones' },
+  { path: '/admin/periodos', icon: CalendarDays, label: 'Periodos' },
   { path: '/admin/importar', icon: Upload, label: 'Importar' },
   { path: '/admin/boletas', icon: FileDown, label: 'Boletas' },
   { path: '/admin/admins', icon: UserCheck, label: 'Administradores' },
