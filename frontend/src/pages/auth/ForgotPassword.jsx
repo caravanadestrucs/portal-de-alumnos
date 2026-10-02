@@ -35,11 +35,13 @@ export default function ForgotPassword() {
 
     try {
       await forgotPassword(email);
+      setError('');
+      setSubmitted(true);
     } catch (err) {
       console.error('Error en forgot-password:', err);
+      setError(err.response?.data?.error || 'Error al enviar el correo. Inténtalo de nuevo.');
     } finally {
       setLoading(false);
-      setSubmitted(true);
     }
   };
 

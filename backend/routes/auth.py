@@ -518,61 +518,61 @@ def forgot_password():
     """
     POST /api/auth/forgot-password
     Solicitar recuperación de contraseña.
-    
+
     Body: { "email": "user@example.com" }
-    
-    SIEMPRE retorna 200 independientemente de si el email existe o no,
-    para no revelar qué emails están registrados (seguridad por obscuridad).
+
+    Si el email NO está registrado devuelve 404 con un mensaje claro
+    (decisión del dueño del sistema: mejor UX que la respuesta opaca;
+    implica que se puede enumerar qué emails existen).
     """
     data = request.get_json()
-    
+
     if not data:
         return jsonify({'error': 'Datos requeridos'}), 400
-    
+
     email = data.get('email', '').strip().lower()
-    
+
     if not email:
         return jsonify({'error': 'El email es requerido'}), 400
-    
+
     if not validate_email(email):
         return jsonify({'error': 'Formato de email inválido'}), 400
-    
+
     # Buscar usuario en las 3 tablas
     user, role = _find_user_by_email(email)
-    
-    if user and role:
-        try:
-            # Generar token JWT de 15 minutos
-            token = generate_reset_token(email, role)
-            
-            # Construir URL de reset
-            from utils.frontend import get_frontend_url
-            frontend_url = get_frontend_url()
-            reset_url = f"{frontend_url}/reset-password?token={token}"
-            
-            # Leer configuración de personalización para el template
-            app_configs = {c.key: c.value for c in Config.query.all()}
-            app_name = app_configs.get('app_name', 'Portal de Calificaciones')
-            logo_url = app_configs.get('app_logo_url', '')
-            
-            # Renderizar template y enviar email
-            html_body = render_reset_email(reset_url, app_name=app_name, logo_url=logo_url)
-            result = send_email(email, "Recuperación de Contraseña", html_body)
-            
-            if result.get('success'):
-                print(f'[EMAIL] Link de recuperación enviado a {email}')
-            else:
-                print(f'[EMAIL] Error al enviar a {email}: {result.get("error")}')
-                
-        except Exception as e:
-            # Error al generar token o enviar email — loggear pero responder 200
-            print(f'[EMAIL] Error en forgot-password para {email}: {str(e)}')
-    else:
-        # Email no registrado: loggear pero responder igual
-        print(f'[EMAIL] Solicitud de recuperación para email no registrado: {email}')
-        # Pequeño sleep para mitigar timing attacks
-        time.sleep(0.1)
-    
+
+    if not user or not role:
+        return jsonify({
+            'error': 'Correo no encontrado. Ponte en contacto con el administrador.'
+        }), 404
+
+    try:
+        # Generar token JWT de 15 minutos
+        token = generate_reset_token(email, role)
+
+        # Construir URL de reset
+        from utils.frontend import get_frontend_url
+        frontend_url = get_frontend_url()
+        reset_url = f"{frontend_url}/reset-password?token={token}"
+
+        # Leer configuración de personalización para el template
+        app_configs = {c.key: c.value for c in Config.query.all()}
+        app_name = app_configs.get('app_name', 'Portal de Calificaciones')
+        logo_url = app_configs.get('app_logo_url', '')
+
+        # Renderizar template y enviar email
+        html_body = render_reset_email(reset_url, app_name=app_name, logo_url=logo_url)
+        result = send_email(email, "Recuperación de Contraseña", html_body)
+
+        if result.get('success'):
+            print(f'[EMAIL] Link de recuperación enviado a {email}')
+        else:
+            print(f'[EMAIL] Error al enviar a {email}: {result.get("error")}')
+
+    except Exception as e:
+        # Error al generar token o enviar email — loggear pero responder 200
+        print(f'[EMAIL] Error en forgot-password para {email}: {str(e)}')
+
     # SIEMPRE retornar 200 con el mismo mensaje
     return jsonify({
         'message': 'Si el email está registrado, recibirás un enlace de recuperación en tu bandeja de entrada'
