@@ -546,7 +546,8 @@ def forgot_password():
             token = generate_reset_token(email, role)
             
             # Construir URL de reset
-            frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+            from utils.frontend import get_frontend_url
+            frontend_url = get_frontend_url()
             reset_url = f"{frontend_url}/reset-password?token={token}"
             
             # Leer configuración de personalización para el template
